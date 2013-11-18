@@ -499,7 +499,7 @@ class Dirac:
         self._source_q = Queue()#queue containing names of source data files for processing
         self._result_q = Queue()#queue containing names of result data files from processing
         self._retrieverq = RetrieverQueue( self.name + "_RetrieverQueue", self.directories['source'], self._source_q, self.sqs['source'], self.s3['source'] )
-        self._posterq = PosterQueue( self.name + "_PosterQueue", self.directories['results'], self._result_q, self.sqs['results'], self.s3['results'] )
+        self._posterq = PosterQueue( self.name + "_PosterQueue", self.directories['results'], self._result_q, self.sqs['results'], self.s3['results'], self.directories['source'], self.sqs['source'] )
         self._loaderq = LoaderQueue( self.name + "_LoaderQueue", self._source_q, self.directories['source'], data_settings = self.data_settings['source'] )
         self._packerq = PackerQueue( self.name + "_PackerQueue", self._result_q, self.directories['results'], data_settings = self.data_settings['results'] )
         self.logger.debug("Subprocesses Initialized" )

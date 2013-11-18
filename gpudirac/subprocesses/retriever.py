@@ -48,7 +48,7 @@ class Retriever(Process):
         """
         Does the work
         """
-        messages = self._sqs_q.get_messages(10)
+        messages = self._sqs_q.get_messages(10, visibility_timeout=200)
         m_count = 0
         for message in messages:
             try:
@@ -56,6 +56,7 @@ class Retriever(Process):
                 for f in m['f_names']:
                     self.download_file( f )
                     self.logger.debug("Downloaded <%s>" % f)
+                self._write_receipt_handle( m['file_id'] message.receipt_handle )
                 cont = True
                 while cont:
                     try:
@@ -65,12 +66,16 @@ class Retriever(Process):
                         self.logger.warning("queue_full" )
                         if self.evt_death.is_set():
                             return m_count
-                self._sqs_q.delete_message(message)
+                #self._sqs_q.delete_message(message)
                 m_count += 1
             except:
                 self.logger.exception("While trying to download files" )                
         return m_count
-            
+    def _write_receipt_handle( file_id, handle): 
+        f_out = os.path.join(self.in_dir, 'receipt_handle_' + file_id)
+        with open(f_out,'w') as rhf:
+            rhf.write(handle)
+
     def _connect_s3(self):
         conn = boto.connect_s3()        
         b = conn.get_bucket( self.s3bucket_name )

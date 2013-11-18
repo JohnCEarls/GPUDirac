@@ -21,14 +21,17 @@ class Poster(Process):
     and copies that file to s3.
     It then notifies the rest of the cluster via sqs that this has occured.
     """
-    def __init__(self, name, out_dir,  q_gpu2s3, evt_death, sqs_name, s3bucket_name):
+    def __init__(self, name, out_dir, in_dir, q_gpu2s3, evt_death, sqs_name, in_sqs_name, s3bucket_name):
         Process.__init__(self, name=name)
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
         self.logger.debug( "Init: out_dir<%s> sqs_name<%s> s3bucket_name<%s>", (out_dir, sqs_name, s3bucket_name) )
         self.q_gpu2s3 = q_gpu2s3
         self.sqs_name = sqs_name
-        self._sqs_q = self._connect_sqs()
+        self.in_dir = in_dir
+        self._sqs_q = self._connect_sqs(sqs_name)
+        #note clean up in_sqs mess
+        self._sqs_conn = boto.sqs.connect_to_region('us-east-1') 
         self.s3bucket_name = s3bucket_name
         self._s3_bucket = self._connect_s3()
         self.out_dir = out_dir
@@ -46,6 +49,7 @@ class Poster(Process):
             self.upload_file( f_info['f_name'] )
             m = Message(body= json.dumps(f_info) )
             self._sqs_q.write( m )
+            self._delete_message( f_info['file_id'] )
         except Empty:
             self.logger.info("starving")
             if self.evt_death.is_set():
@@ -54,15 +58,21 @@ class Poster(Process):
         except:
             self.logger.exception("exception in run_once")
             self.evt_death.set()
+    def _delete_message(self, file_id):
+        with open(os.path.join(self._in_dir, 'receipt_handle_' + file_id), 'r') as fh:
+            file_handle = fh.read()
+        self._sqs_conn.delete_message_from_handle(file_handle)
 
     def _connect_s3(self):
         conn = boto.connect_s3()        
         b = conn.get_bucket( self.s3bucket_name )
         return b
 
-    def _connect_sqs(self):
+    def _connect_sqs(self, name=None):
+        if name is None:
+            name = self.sqs_name
         conn = boto.sqs.connect_to_region('us-east-1')
-        q = conn.create_queue( self.sqs_name )
+        q = conn.create_queue( name )
         return q
 
     def upload_file(self, file_name):
@@ -74,7 +84,7 @@ class Poster(Process):
 
 
 class PosterQueue:
-    def __init__(self,  name, out_dir,  q_gpu2s3,sqs_name, s3bucket_name):
+    def __init__(self,  name, out_dir,  q_gpu2s3,sqs_name, s3bucket_name, in_dir, in_sqs):
         self.name = name
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
@@ -85,6 +95,8 @@ class PosterQueue:
         self.s3bucket_name = s3bucket_name
         self._posters = []
         self._reaper = []
+        self.in_dir = in_dir
+        self.in_sqs_q = in_sqs
 
     def add_poster(self, num=1):
 
@@ -93,7 +105,9 @@ class PosterQueue:
         else:
             evt_death = Event()
             evt_death.clear()
-            self._posters.append( Poster(self.name + "_Poster_" + str(num), self.out_dir,  self.q_gpu2s3, evt_death, self.sqs_name, self.s3bucket_name))
+
+        
+            self._posters.append( Poster(self.name + "_Poster_" + str(num), self.out_dir, self.in_dir,  self.q_gpu2s3, evt_death, self.sqs_name,self.in_sqs_q, self.s3bucket_name))
             self._reaper.append(evt_death)
             self._posters[-1].daemon = True
             self._posters[-1].start()
