@@ -129,14 +129,15 @@ class Dirac:
         sm = data.SharedSampleMap( sample_map )
         nm = data.SharedNetworkMap( network_map )
         #go to work
-        srt,rt,rms =  dirac.run( exp, gm, sm, nm, self.sample_block_size, self.npairs_block_size, self.nets_block_size )
+        srt,rt,rms =  dirac.run( exp, gm, sm, nm, self.sample_block_size, self.pairs_block_size, self.nets_block_size )
         #done with input
+        file_id = db.get_file_id()
         db.release_loader_data()
         db.set_add_data()
         #handle output
-        pb = pb_q.next_packer_boss()
+        pb = self._packerq.next_packer_boss()
         rms.fromGPU( pb.get_mem() )
-        pb.set_meta( my_f['file_id'], ( rms.buffer_nnets, rms.buffer_nsamples ), dtype['rms'] )
+        pb.set_meta(file_id , ( rms.buffer_nnets, rms.buffer_nsamples ))
         pb.release() 
         return True
 
@@ -173,6 +174,7 @@ class Dirac:
         #five means we should exit main process
         """
         self._tcount += 1
+        logging.info("In terminator tcount[%i] terminating[%i]" % (self._tcount, self._terminating))
         if self._tcount > 100:
             #we've tried to clean up too much
             self.logger.critical("Unable to exit cleanly, getting dirty" )
@@ -186,7 +188,7 @@ class Dirac:
             try:
                 db = self._loaderq.next_loader_boss()
             except MaxDepth:
-                if self._source_q.empty():
+                if self._source_q.empty() or self._tcount>10:
                     self._loaderq.kill_all()
                     self._terminating = 3
                     self._hb_interval = 1
@@ -330,7 +332,7 @@ class Dirac:
         state of gpu
         """
         message = self._generate_heartbeat_dict()
-        self.logger.debug("heartbeat: %s" % json.dumps(message))
+        self.logger.info("heartbeat: %s" % json.dumps(message))
         return Message(body=json.dumps(message))
 
     def _generate_heartbeat_dict(self):
@@ -402,7 +404,7 @@ class Dirac:
         command_q = conn.get_queue( self.sqs['command'] )
         command = None
         ctr = 0
-        while command is None and ctr < 10 :
+        while command is None and ctr < 100:
             command = command_q.read(  wait_time_seconds=20 ) 
             if command is None:
                 self.logger.warning("No instructions in [%s]"%self.sqs['command'])
@@ -597,6 +599,8 @@ class Dirac:
                             raise
 def main():
     import argparse
+    import ConfigParser
+    import os, os.path
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Configfile name', required=True)
     args = parser.parse_args()

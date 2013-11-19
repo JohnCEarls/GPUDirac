@@ -111,10 +111,24 @@ class LogRecordSocketReceiver(SocketServer.ThreadingTCPServer):
                 self.handle_request()
 
 def startLogger():
-    LOG_FILENAME = "/scratch/sgeadmin/logs/tcdirac.log"
+    import argparse
+    import ConfigParser
+    import os, os.path
+    import logging 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', help='Configfile name', required=True)
+    args = parser.parse_args()
+    config = ConfigParser.ConfigParser()
+    config.read(args.config)
+    log_dir = config.get('directories', 'log')
+
+    LOG_FILENAME = "gpudirac-logserver.log"
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logging.basicConfig(  format=log_format)
-    handler = logging.handlers.RotatingFileHandler( LOG_FILENAME, maxBytes=2000000, backupCount=5)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    handler = logging.handlers.RotatingFileHandler( os.path.join(log_dir,LOG_FILENAME), maxBytes=100*(2**20), backupCount=10)#log 100 MB
     handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger('').addHandler(handler)
     tcpserver = LogRecordSocketReceiver()

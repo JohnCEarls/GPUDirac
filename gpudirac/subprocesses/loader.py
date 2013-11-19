@@ -2,7 +2,7 @@ import time
 import logging
 import hashlib
 import random
-
+import os, os.path
 from multiprocessing import Process, Queue, Value, Event, Array
 from Queue import Empty
 

@@ -132,14 +132,15 @@ class Packer(Process):
             if self.events['data_ready'].is_set():
                 mess = {}
                 try:
-                    file_id = self.in_q.get(True, 3)
-                    mess['file_id'] = file_id
+                    f_info = self.in_q.get(True, 3)
+                    #f_info is a dict containing file_id, file_names
+                    mess['file_id'] = f_info['file_id']
                     data = self.get_data()
                     #Note: this is not guaranteed to be unique, only part of array used
                     #      do not want to wait for large matrix to be hashed
                     f_hash = hashlib.sha1(str(data)).hexdigest()
                     
-                    f_name = '_'.join([self.p_type, file_id, f_hash])
+                    f_name = '_'.join([self.p_type, mess['file_id'], f_hash])
                     with open(os.path.join( self.out_dir, f_name), 'wb') as f:
                         self.logger.debug("Packer writing <%s>" % (f_name))
                         np.save(f, data)
@@ -150,7 +151,7 @@ class Packer(Process):
                     self.events['data_ready'].clear()
                     self.events['add_data'].set()
                     self.out_q.put(mess)
-                    self.logger.debug(" file_id<%s> processed" % (file_id))
+                    self.logger.debug(" file_id<%s> processed" % (mess['file_id']))
                     wait_ctr = 0
                 except Empty:
                     self.logger.debug("waiting on file_id")
@@ -228,8 +229,9 @@ class PackerBoss:
         self.packer.events['add_data'].clear()
         return self.packer.get_mem()
 
-    def set_meta(self, file_id, shape, dtype):
+    def set_meta(self, file_id, shape):
         self.in_q.put(file_id)
+        dtype = self.data_settings[0][2]
         self.packer.set_meta(shape, dtype)
 
     def release(self):

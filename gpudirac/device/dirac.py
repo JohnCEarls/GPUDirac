@@ -3,6 +3,8 @@ import pycuda.driver as cuda
 import numpy as np
 from pycuda._driver import MemoryError
 import logging 
+import kernels
+from pycuda.compiler import SourceModule
 
 def run( exp, gm, sm, nm, sample_block_size, npairs_block_size, nets_block_size, rms_only=True):
     srt = data.SharedSampleRankTemplate( exp.buffer_nsamples, gm.buffer_npairs )
@@ -26,9 +28,9 @@ def run( exp, gm, sm, nm, sample_block_size, npairs_block_size, nets_block_size,
             if d.gpu_data is not None:
                 d.gpu_data.free()
         raise
-    dirac.sampleRankTemplate( exp.gpu_data, gm.gpu_data, srt.gpu_data, exp.buffer_nsamples, gm.buffer_npairs, npairs_block_size, sample_block_size)
-    dirac.rankTemplate( srt.gpu_data, sm.gpu_data, rt.gpu_data, srt.buffer_nsamples, sm.buffer_kneighbors, gm.buffer_npairs, npairs_block_size, sample_block_size)
-    dirac.rankMatchingScores( srt.gpu_data, rt.gpu_data, rms.gpu_data, nm.gpu_data, srt.buffer_nsamples, nm.buffer_nnets, sample_block_size, nets_block_size)
+    sampleRankTemplate( exp.gpu_data, gm.gpu_data, srt.gpu_data, exp.buffer_nsamples, gm.buffer_npairs, npairs_block_size, sample_block_size)
+    rankTemplate( srt.gpu_data, sm.gpu_data, rt.gpu_data, srt.buffer_nsamples, sm.buffer_kneighbors, gm.buffer_npairs, npairs_block_size, sample_block_size)
+    rankMatchingScores( srt.gpu_data, rt.gpu_data, rms.gpu_data, nm.gpu_data, srt.buffer_nsamples, nm.buffer_nnets, sample_block_size, nets_block_size)
     return (srt, rt, rms)
 
 def reqMemory(exp, rms,np,rt,sm,srt,gm,nm,sample_block_size, nets_block_size, npairs_block_size ):

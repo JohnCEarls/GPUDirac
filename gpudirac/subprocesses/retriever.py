@@ -56,7 +56,9 @@ class Retriever(Process):
                 for f in m['f_names']:
                     self.download_file( f )
                     self.logger.debug("Downloaded <%s>" % f)
-                self._write_receipt_handle( m['file_id'] message.receipt_handle )
+                    m[f[:2]] = f
+                self._write_receipt_handle( m['file_id'], message.receipt_handle )
+
                 cont = True
                 while cont:
                     try:
@@ -71,7 +73,7 @@ class Retriever(Process):
             except:
                 self.logger.exception("While trying to download files" )                
         return m_count
-    def _write_receipt_handle( file_id, handle): 
+    def _write_receipt_handle(self, file_id, handle): 
         f_out = os.path.join(self.in_dir, 'receipt_handle_' + file_id)
         with open(f_out,'w') as rhf:
             rhf.write(handle)
@@ -87,9 +89,14 @@ class Retriever(Process):
         return q
 
     def download_file(self, file_name):
-        k = Key(self._s3_bucket)
-        k.key = file_name
-        k.get_contents_to_filename( os.path.join(self.in_dir, file_name) )
+        try:
+            k = Key(self._s3_bucket)
+            k.key = file_name
+            k.get_contents_to_filename( os.path.join(self.in_dir, file_name) )
+        except:
+            logging.exception("Error on attempt to copy S3:/%s/%s to %s]" %(self._s3_bucket.name, self.file_name, os.path.join(self.in_dir, file_name) ))
+            raise
+
 
 
 class RetrieverQueue:

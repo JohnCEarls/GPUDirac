@@ -32,6 +32,7 @@ class Poster(Process):
         self._sqs_q = self._connect_sqs(sqs_name)
         #note clean up in_sqs mess
         self._sqs_conn = boto.sqs.connect_to_region('us-east-1') 
+        self._in_sqs_q = self._sqs_conn.get_queue(in_sqs_name)
         self.s3bucket_name = s3bucket_name
         self._s3_bucket = self._connect_s3()
         self.out_dir = out_dir
@@ -59,9 +60,9 @@ class Poster(Process):
             self.logger.exception("exception in run_once")
             self.evt_death.set()
     def _delete_message(self, file_id):
-        with open(os.path.join(self._in_dir, 'receipt_handle_' + file_id), 'r') as fh:
+        with open(os.path.join(self.in_dir, 'receipt_handle_' + file_id), 'r') as fh:
             file_handle = fh.read()
-        self._sqs_conn.delete_message_from_handle(file_handle)
+        self._sqs_conn.delete_message_from_handle(self._in_sqs_q, file_handle)
 
     def _connect_s3(self):
         conn = boto.connect_s3()        
