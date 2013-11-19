@@ -59,6 +59,7 @@ class Poster(Process):
         except:
             self.logger.exception("exception in run_once")
             self.evt_death.set()
+
     def _delete_message(self, file_id):
         with open(os.path.join(self.in_dir, 'receipt_handle_' + file_id), 'r') as fh:
             file_handle = fh.read()

@@ -71,10 +71,23 @@ def push_data(num_data):
         os.makedirs(working_dir)
     if not os.path.exists(orig_dir):
         os.makedirs(orig_dir)
+    ps = []
+    np = 10
+    for i in range(np):
+        p = Process(target=afdq, args = (working_dir, orig_dir, block_sizes, (num_data/np) + 1, parsed))
+        p.start()
+        ps.append(p)
+    dsize = afdq(working_dir, orig_dir, block_sizes, (num_data/np) + 1, parsed)
+    for p in ps:
+        p.join()
+    return dsize
+
+def afdq(working_dir, orig_dir, block_sizes, num_data, parsed):
     dsize, file_list = addFakeDataQueue(working_dir, orig_dir, block_sizes, num_data)
     load_data_s3( file_list, working_dir, parsed['source-s3'])
     load_data_sqs( file_list,parsed['source-sqs'] )
     return dsize
+
 
 def init_signal(dsize,  master_q = 'tcdirac-master'):
     try:
@@ -117,7 +130,7 @@ def load_balance_signal( command_q ):
 def get_lb_messages():
     mess = []
     for p in ['loader','poster','packer', 'retriever']:
-        for t in ['add','remove']:
+        for t in ['add']:#'remove'
             command = {}
             command['message-type'] = 'load-balance'
             command['process'] = p 
@@ -147,7 +160,7 @@ def get_gpu_message(dsize):
     parsed['pairs-block-size'] = 16
     parsed['nets-block-size'] = 8
 
-    parsed['heartbeat-interval'] = 1
+    parsed['heartbeat-interval'] = 10
     return json.dumps(parsed)
 
 def get_terminate_message():
@@ -220,6 +233,8 @@ def addFakeDataQueue(in_dir,orig_dir, block_sizes, num_data):
                 f_path = os.path.join(orig_dir, '_'.join([k,f_dict['file_id'],'original']))
                 with open(f_path, 'wb') as f:
                     np.save( f, v )
+    for k,v in dsize.iteritems():
+        dsize[k] =v*10
     return dsize, check_list
 
 
@@ -296,7 +311,10 @@ def sqs_cleanup():
         if q.name in constant:
             q.clear()
         else:
-            q.delete()    
+            try:
+                q.delete()    
+            except:
+                print "%s: won't delete" % q.name
 def s3_cleanup(bucket= 'tcdirac-togpu-00'):
     conn = boto.connect_s3()
     b = conn.get_bucket(bucket)
@@ -305,7 +323,10 @@ def s3_cleanup(bucket= 'tcdirac-togpu-00'):
 
     
 if __name__ == "__main__":
-    num_data = 10
+    num_data = 200 
     (RUN, LOAD_BALANCE, TERMINATE, CLEANUP) = range(4)
     #s3_cleanup()
     runTest(num_data, level=TERMINATE)
+    #runTest(num_data, level=RUN)
+    #runTest(num_data, level=LOAD_BALANCE)
+    #runTest(num_data, level=CLEANUP)

@@ -65,7 +65,7 @@ class Dirac:
             self.logger.error("Error on creation of subprocesses, cleanup resources and reraise")
             raise    
         #counters
-        self._hb = 0
+        self._hb = 0#heartbeat counter
         self._tcount = 0
         self.ctx = None
 
@@ -84,12 +84,15 @@ class Dirac:
             self.logger.debug("starting main loop.")
             while self._terminating < 5:
                 res = self._main()
-                if not res:
-                    self.logger.debug("error in main <loader>") 
                 self._heartbeat()
         except:
             self.logger.exception("exception, attempting cleanup" ) 
-        self.logger.debug("Starting Cleanup")
+            if self._terminating < 5:#otherwise we've already tried this
+                try:
+                    self._terminator()
+                except:
+                    self.logger.exception("Terminator failed in exception")
+        self.logger.warning("Starting Cleanup")
         try:
             self._heartbeat(True)
         except:
@@ -110,12 +113,7 @@ class Dirac:
         try:
             db = self._loaderq.next_loader_boss()
         except MaxDepth:
-            if self._terminating > 0:
-                self.logger.debug("exceeded max depth for LoaderBoss")
-            else:
-                self.logger.warning("exceeded max depth for LoaderBoss")
-            return False
-        except:
+            self.logger.warning("LoaderBoss has no work")
             return False
         
         db.clear_data_ready()
@@ -154,8 +152,6 @@ class Dirac:
                 mess = self._generate_heartbeat_message()
                 response_q.write( mess )
                 self._check_commands()
-                if self._terminating > 0:
-                    self._terminator()
             except:
                 self.logger.exception("Heartbeat transmit failed.")
                 raise
@@ -165,52 +161,18 @@ class Dirac:
     def _terminator(self):
         """
         Handles the logic for shutting down instance.
-        TODO: I am not happy with this. Incurring tech. debt.
-        #terminating is state machine
-        #zero means not terminating
-        #two means waiting for loader to clear queue
-        #three means waiting for packer to pack all data
-        #four means waiting for poster to send off data
-        #five means we should exit main process
         """
-        self._tcount += 1
-        logging.info("In terminator tcount[%i] terminating[%i]" % (self._tcount, self._terminating))
-        if self._tcount > 100:
-            #we've tried to clean up too much
-            self.logger.critical("Unable to exit cleanly, getting dirty" )
-            raise Exception("Unable to exit cleanly")
-        elif self._terminating == 1:
-            #one means soft kill on retriever, so hopefully the pipeline will runout
-            if not self._soft_kill_retriever():
-                self._hard_kill_retriever()
-            self._terminating = 2
-        elif self._terminating == 2:
-            try:
-                db = self._loaderq.next_loader_boss()
-            except MaxDepth:
-                if self._source_q.empty() or self._tcount>10:
-                    self._loaderq.kill_all()
-                    self._terminating = 3
-                    self._hb_interval = 1
-            except:
-                #no loaders
-                self._terminating = 3
-                self._hb_interval = 1
-        elif self._terminating == 3:
-            ctr = 1
-            while not self._packerq.no_data() and ctr < 10:
-                time.sleep(1)
-                ctr += 1
-            self._packerq.kill_all()
-            self._terminating = 4
-        elif self._terminating == 4:
-            ctr = 0
-            while not self._result_q.empty() and ctr < 10:
-                time.sleep(1)
-                ctr += 1
-            self._posterq.kill_all()
-            self._posterq.clean_up()
-            self._terminating = 5
+        #one means soft kill on retriever, so hopefully the pipeline will runout
+        self._terminating = 5
+        self.logger.warning("Killing Retriever")
+        self._hard_kill_retriever()
+        self.logger.warning("Killing Loader")
+        self._loaderq.kill_all()
+        self.logger.warning("Killing Packer")
+        self._packerq.kill_all()
+        self.logger.warning("Killing Poster")
+        self._hard_kill_poster()
+        self.logger.warning("Death to Smoochie")
 
     def _check_commands(self):
         """
@@ -230,9 +192,9 @@ class Dirac:
         """
         if command['message-type'] == 'termination-notice':
             #master says die
-            self.logger.debug("%s: received termination notice" % self.name)
-            self._soft_kill_retriever()
+            self.logger.warning("%s: received termination notice" % self.name)
             self._terminating = 1
+            self._terminator()
         if command['message-type'] == 'load-balance':
             self.logger.info(str(command))
             self._handle_load_balance(command)
@@ -517,44 +479,18 @@ class Dirac:
         self._loaderq.add_loader_boss(5)
         self._packerq.add_packer_boss(5)
 
-    def _soft_kill_retriever(self):
-        """
-        Starts the process of killing the retriever.
-        Returns true if all retriever processes have been killed
-        False if still trying to kill.
-        """
-        self.logger.debug("attempting soft_kill_retriever" )
-        if not self._retrieverq.all_dead():
-            self._retrieverq.kill_all()
-            return False
-        else:
-            self._retrieverq.clean_up()
-            return True
-
     def _hard_kill_retriever(self):
         """
         Terminates retriever subprocesses
         """
-        self.logger.debug("Hard Kill Retriever")
+        self.logger.warning("Hard Kill Retriever")
+        self._retrieverq.kill_all()
+        ctr = 0
+        while not self._retrieverq.all_dead() and ctr < 5:
+            self.logger.warning("Retriever not dead yet")
+            time.sleep(1)
+            ctr += 1
         self._retrieverq.clean_up()
-
-    def _soft_kill_poster(self):
-        """
-        Waits until all files are sent and then gives kill signal to posterq
-        If the result_q is not shrinking, raises PosterProgress exception
-        """
-        curr_qsize = 10000
-        tries = 0
-        while not self._result_q.empty():
-            if self._result_q.qsize() < curr_qsize:
-                curr_qsize =  self._result_q.qsize()
-                time.sleep(2)
-                tries += 1
-            else:
-                raise PosterProgress("Poster not making progress %i" % self._result_q.qsize())
-        self._posterq.kill_all()
-        self._posterq.clean_up()
-        return True    
 
     def _hard_kill_poster(self):
         """
@@ -562,6 +498,7 @@ class Dirac:
         May be unuploaded files.
         """
         self._posterq.kill_all()
+        #sleeps in posterqueue
         self._posterq.clean_up()
 
 

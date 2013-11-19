@@ -97,7 +97,7 @@ class LoaderQueue:
             raise Exception("No Loaders")
         if max_depth is None:
             max_depth = 2*len(self._bosses)#default max_depth to 2 passes of the queue
-            logging.debug( "Max depth set[%i]", max_depth) 
+            self.logger.debug( "Max depth set[%i]", max_depth) 
         if max_depth <= 0:
             self.logger.debug("Exceeded Max Depth")
             raise MaxDepth("Max Depth exceeded")            
@@ -493,8 +493,13 @@ class Loader(Process):
         np_array = np_array.reshape(size)
 
         self.logger.debug("writing to shared memory")  
+
         with self.smem_data.get_lock():
-            self.smem_data[:size] = np_array[:]
+            try:
+                self.smem_data[:size] = np_array[:]
+            except ValueError:
+                self.logger.exception("np copy no good np size[%i], shared_size[%i]"%(size,len( self.smem_data)))
+                raise
         with self.smem_shape.get_lock():
             self.smem_shape[:len(shape)] = shape[:]
         with self.smem_dtype.get_lock():
@@ -512,7 +517,8 @@ class Loader(Process):
     def _get_data(self, fname):
         return np.load(os.path.join(self.in_dir, fname))
 
-    def run(self):  
+    def run(self):
+
         self.logger.info("Starting ") 
         old_md5 = '0'
         #get file name for import
@@ -525,7 +531,12 @@ class Loader(Process):
             self.evt_add_data.wait(self._ad_timeout)
             if self.evt_add_data.is_set():
                 self.logger.debug(" loading data into mem ") 
-                self._load_mem( data ) 
+                try:
+                    self._load_mem( data )
+                except ValueError:
+                    self.logger.error("Could not load data from file[%s]" % fname)
+                    self.logger.error("Exiting due to error")
+                    raise
                 self.logger.debug(" clearing evt_add_data" )
                 self.evt_add_data.clear()
                 self.logger.debug(" setting evt_data ready")
