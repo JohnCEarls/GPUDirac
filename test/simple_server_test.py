@@ -88,6 +88,33 @@ def afdq(working_dir, orig_dir, block_sizes, num_data, parsed):
     load_data_sqs( file_list,parsed['source-sqs'] )
     return dsize
 
+def test_accuracy(orig_dir,  sqs_queue, s3_bucket, num_tests):
+    s3 = boto.connect_s3()
+    sqs = boto.connect_sqs()
+    bucket = s3.get_bucket(s3_bucket)
+    my_queue = sqs.get_queue(sqs_queue)
+    while num_tests > 0:
+        num_tests -= 1
+        for m in my_queue.get_messages():
+            res = json.loads(m.get_body())
+            my_queue.delete_message(m)
+        k = bucket.get_key(res['f_name'] ) 
+        result_file = os.path.join( orig_dir, res['f_name'])
+        k.get_contents_to_filename( result_file )
+        rms = np.load( result_file )
+        test = compare_serial_rms( orig_dir, res['file_id'], rms)
+        print "Test", res['file_id'], "passed" if test else "failed"
+        
+def compare_serial_rms(orig_dir, file_id, rms_buffer)
+    exp = np.load(os.path.join(orig_dir, '_'.join(['em',file_id,'original'])))
+    nm = np.load(os.path.join(orig_dir, '_'.join(['nm',file_id,'original'])))
+    sm = np.load(os.path.join(orig_dir, '_'.join(['sm',file_id,'original'])))
+    gm = np.load(os.path.join(orig_dir, '_'.join(['gm',file_id,'original'])))
+
+    _,_, rms = testDirac(em, gm, sm, nm)
+    return np.allclose(rms, rms_buffer[:rms.shape[0],:rms.shape[1]])
+    
+
 
 def init_signal(dsize,  master_q = 'tcdirac-master'):
     try:
@@ -320,6 +347,37 @@ def s3_cleanup(bucket= 'tcdirac-togpu-00'):
     b = conn.get_bucket(bucket)
     b.delete_keys(b.get_all_keys())
 
+def testDirac(expression_matrix, gene_map, sample_map, network_map):
+    srt = np.zeros((gene_map.shape[0]/2, expression_matrix.shape[1]))
+    for i in range(expression_matrix.shape[1]):
+        for j in range(gene_map.shape[0]/2):
+            g1 = gene_map[2*j]
+            g2 = gene_map[2*j +  1]
+            if expression_matrix[g1,i] < expression_matrix[g2,i]:
+                srt[j,i] = 1
+            else:
+                srt[j,i] = 0
+    rt = np.zeros_like(srt)
+    
+    for i in range(expression_matrix.shape[1]):
+        neigh = sample_map[i,:]
+        t = srt[:,neigh].sum(axis=1)
+        for j in range(len(t)):
+            rt[j,i] = int(len(neigh)/2 < t[j])
+
+    rms_matrix =  np.zeros_like(srt)
+    for i in range(expression_matrix.shape[1]):
+        for j in range(gene_map.shape[0]/2):
+            rms_matrix[j,i] = int(rt[j,i] == srt[j,i])
+    rms_final = np.zeros((len(network_map) - 1 , expression_matrix.shape[1]))
+    
+    for i in range(len(network_map) - 1):
+        nstart = network_map[i]
+        nend = network_map[i+1]
+        rms_final[i,:] = rms_matrix[nstart:nend, :].sum(axis=0)/float(nend-nstart)
+    return srt, rt, rms_final
+
+                
 
     
 if __name__ == "__main__":
