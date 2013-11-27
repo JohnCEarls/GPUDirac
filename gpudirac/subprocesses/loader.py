@@ -51,13 +51,13 @@ def kill_all(name, loaders, _ld_die_evt, loader_dist, file_q):
                     t_check.append(rn)
                     temp_d[k] = fname
             failed = False
-        
+
             for r in t_check[1:]:
                 if r!=t_check[0]:
                     #order got screwed up. lost data
                     failed = True
-            
-            
+
+
             if not failed and len(t_check) == 4:
                 logger.debug( "terminator: recycling")
                 file_q.put( temp_d )
@@ -141,11 +141,11 @@ class LoaderQueue:
             self.logger.info("killing [%s]" % l.name)
         for l in self._bosses:
             l.clean_up()
-          
+
         self._bosses = []
         self._bosses_skip = []
-        self._curr = -1 
-    
+        self._curr = -1
+
     def set_data_settings(self, data_settings):
         self.data_settings = data_settings
 
@@ -156,7 +156,7 @@ class LoaderQueue:
             if r.is_alive():
                 count += 1
         return count
- 
+
 
 
 class LoaderBoss:
@@ -504,7 +504,7 @@ class Loader(Process):
             self.smem_shape[:len(shape)] = shape[:]
         with self.smem_dtype.get_lock():
             self.smem_dtype.value = dt_id
-        self.logger.debug("shared memory copy complete" )  
+        self.logger.debug("shared memory copy complete" )
 
 
     def _clear_mem(self):

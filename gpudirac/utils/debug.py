@@ -46,7 +46,6 @@ class TimeTracker:
 Below is lightly modified from http://docs.python.org/2/howto/logging-cookbook.html#logging-cookbook
 """
 
-
 class LogRecordStreamHandler(SocketServer.StreamRequestHandler):
     """Handler for a streaming logging request.
 

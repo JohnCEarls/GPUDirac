@@ -63,7 +63,7 @@ class Dirac:
             self._init_subprocesses()
         except:
             self.logger.error("Error on creation of subprocesses, cleanup resources and reraise")
-            raise    
+            raise
         #counters
         self._hb = 0#heartbeat counter
         self._tcount = 0
@@ -76,7 +76,6 @@ class Dirac:
         """
         The main entry point
         """
-        
         try:
             self.logger.info("Entering main[run()] process.")
             self._init_gpu()
@@ -115,7 +114,7 @@ class Dirac:
         except MaxDepth:
             self.logger.warning("LoaderBoss has no work")
             return False
-        
+
         db.clear_data_ready()
         expression_matrix = db.get_expression_matrix()
         gene_map = db.get_gene_map()
@@ -185,7 +184,7 @@ class Dirac:
         for mess in command_q.get_messages(num_messages=10):
             self._handle_command(json.loads(mess.get_body()))
             command_q.delete_message(mess)
-        
+
     def _handle_command( self, command):
         """
         Given a command from master, initiate change indicated

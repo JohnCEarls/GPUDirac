@@ -8,6 +8,7 @@ New BSD License
 
 Copyright (c) 2013 - Alex Rubinsteyn.
 All rights reserved.
+        command_q = conn.create_queue( self.sqs['command'] )
 
 
 Redistribution and use in source and binary forms, with or without
@@ -93,13 +94,13 @@ def is_unsigned(dtype):
 
 def is_complex(dtype):
   return dtype.type in np.sctypes['complex']
-   
+
 def is_bool(dtype):
   return dtype == np.bool8
-   
+
 def is_int(dtype):
   return is_bool(dtype) or is_signed(dtype) or is_unsigned(dtype)
-  
+
 
 import ctypes 
 _to_ctypes = {
