@@ -69,6 +69,12 @@ class Dirac:
         self._tcount = 0
         self.ctx = None
 
+
+This is a vim test.
+This is a vim test.
+This is a vim test.
+This is a vim test.
+
     def set_logging_level(self, level):
         self.logger.setLevel(level)
 
@@ -76,6 +82,9 @@ class Dirac:
         """
         The main entry point
         """
+This is a vim test.
+This is a vim test.
+This is a vim test.
         try:
             self.logger.info("Entering main[run()] process.")
             self._init_gpu()
