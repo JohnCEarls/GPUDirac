@@ -28,6 +28,17 @@ import argparse
 class PosterProgress(Exception):
     pass
 
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
 class Dirac:
     """
     Class for running dirac on the gpu.
@@ -46,6 +57,16 @@ class Dirac:
         sqs['command'] : queue containing instructions from master
         sqs['response'] : queue for communication with master
     """
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
+This is for tests
     def __init__(self, directories, init_q ):
         self.name = self._generate_name()
         self.logger = logging.getLogger(self.name)
