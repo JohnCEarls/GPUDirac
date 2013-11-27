@@ -34,7 +34,7 @@ console_scripts = ['gpudirac-logserver = gpudirac.utils.debug:startLogger','gpud
 extra = dict(install_requires=["boto>=2.9.9","pycuda>=2013.1.1"],              
             entry_points=dict(console_scripts=console_scripts), 
              zip_safe=False)
-VERSION = '0.0.0'
+VERSION = '0.0.0'#actually set in utils.static
 static = os.path.join('gpudirac','utils','static.py')
 execfile(static)
 
