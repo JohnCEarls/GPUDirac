@@ -28,7 +28,7 @@ import argparse
 class PosterProgress(Exception):
     pass
 
-This is for tests
+This not is not for tests
 This is for tests
 This is for tests
 This is for tests
@@ -92,8 +92,7 @@ This is for tests
 
 
 This is a vim test.
-This is a vim test.
-This is a vim test.
+This I  am not amused is a vim test.
 This is a vim test.
 
     def set_logging_level(self, level):
