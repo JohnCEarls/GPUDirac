@@ -28,17 +28,6 @@ import argparse
 class PosterProgress(Exception):
     pass
 
-This not is not for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
 class Dirac:
     """
     Class for running dirac on the gpu.
@@ -57,16 +46,6 @@ class Dirac:
         sqs['command'] : queue containing instructions from master
         sqs['response'] : queue for communication with master
     """
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
-This is for tests
     def __init__(self, directories, init_q ):
         self.name = self._generate_name()
         self.logger = logging.getLogger(self.name)
@@ -90,11 +69,6 @@ This is for tests
         self._tcount = 0
         self.ctx = None
 
-
-This is a vim test.
-This I  am not amused is a vim test.
-This is a vim test.
-
     def set_logging_level(self, level):
         self.logger.setLevel(level)
 
@@ -102,9 +76,6 @@ This is a vim test.
         """
         The main entry point
         """
-This is a vim test.
-This is a vim test.
-This is a vim test.
         try:
             self.logger.info("Entering main[run()] process.")
             self._init_gpu()
