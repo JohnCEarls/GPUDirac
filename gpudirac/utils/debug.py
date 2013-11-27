@@ -1,5 +1,4 @@
 DEBUG = True
-debug_dir='/scratch/sgeadmin/debug'
 import time
 import os
 import os.path
