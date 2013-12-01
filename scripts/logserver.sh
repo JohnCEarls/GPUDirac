@@ -11,28 +11,41 @@
 ### END INIT INFO
  
 # Change the next 3 lines to suit where you install your script and what you want to call it
-DIR=/usr/local/bin/myservice
-DAEMON=$DIR/myservice.py
-DAEMON_NAME=myservice
+DIR=/home/sgeadmin/.local/bin
+DAEMON=$DIR/gpudirac-logserver
+CONFIG_OPTS="-c $DIR/config.cfg"
+DAEMON_NAME=gpulogger
  
 # This next line determines what user the script runs as.
 # Root generally not recommended but necessary if you are using the Raspberry Pi GPIO from Python.
-DAEMON_USER=root
+DAEMON_USER=sgeadmin
  
 # The process ID of the script when it runs is stored here:
-PIDFILE=/var/run/$DAEMON_NAME.pid
- 
+PIDFILE=$DIR/$DAEMON_NAME.pid
+
 . /lib/lsb/init-functions
  
 do_start () {
     log_daemon_msg "Starting system $DAEMON_NAME daemon"
-    start-stop-daemon --start --background --pidfile $PIDFILE --make-pidfile --user $DAEMON_USER --startas $DAEMON
+    start-stop-daemon  --start --background --pidfile $PIDFILE --make-pidfile --user $DAEMON_USER --startas $DAEMON -- $CONFIG_OPTS
     log_end_msg $?
 }
 do_stop () {
     log_daemon_msg "Stopping system $DAEMON_NAME daemon"
     start-stop-daemon --stop --pidfile $PIDFILE --retry 10
     log_end_msg $?
+}
+
+check_stat () {
+   status="0"
+   pidofproc "$DAEMON" >/dev/null || status="$?"
+   if [ "$status" = 0 ]; then
+     log_success_msg "$DAEMON_NAME is running"
+     exit 0
+   else
+     log_failure_msg "$DAEMON_NAME is not running"
+     exit $status
+   fi
 }
  
 case "$1" in
@@ -47,7 +60,7 @@ case "$1" in
         ;;
  
     status)
-        status_of_proc "$DAEMON_NAME" "$DAEMON" && exit 0 || exit $?
+        check_stat
         ;;
     *)
         echo "Usage: /etc/init.d/$DEAMON_NAME {start|stop|restart|status}"
