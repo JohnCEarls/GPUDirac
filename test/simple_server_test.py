@@ -34,11 +34,15 @@ import pycuda.driver as cuda
 
 
 def runTest(num_data, level=0 ):
+    #parser.add_argument('run_level', help="0:run, 1:load balance, 2:terminate, 3:cleanup")
     if level == 0:
         #creates data and starts server
+        print "Run starting"
         dsize = push_data( num_data)
+        print "sending init signal"
         init_signal(dsize)
     elif level == 1:
+        print "Load Balance starting"
         #load balance
         settings = None
         with open('settings.json', 'r') as s:
@@ -47,14 +51,15 @@ def runTest(num_data, level=0 ):
             raise Exception("Shit on Load Balance")
         load_balance_signal( settings['command'] )
     elif level == 2:
+        print "Terminate Starting"
         with open('settings.json', 'r') as s:
             settings = json.loads(s.read())
         if settings is None:
-            raise Exception("Shit on Load Balance")
+            raise Exception("Shit on terminate")
         terminate_signal( settings['command'] ) 
     elif level == 3:
-        sqs_cleanup()
-        s3_cleanup(bucket= 'tcdirac-togpu-00')    
+    sqs_cleanup()
+    s3_cleanup(bucket= 'tcdirac-togpu-00')    
 
 def push_data(num_data):
 
@@ -105,7 +110,7 @@ def test_accuracy(orig_dir,  sqs_queue, s3_bucket, num_tests):
         test = compare_serial_rms( orig_dir, res['file_id'], rms)
         print "Test", res['file_id'], "passed" if test else "failed"
 
-def compare_serial_rms(orig_dir, file_id, rms_buffer)
+def compare_serial_rms(orig_dir, file_id, rms_buffer):
     exp = np.load(os.path.join(orig_dir, '_'.join(['em',file_id,'original'])))
     nm = np.load(os.path.join(orig_dir, '_'.join(['nm',file_id,'original'])))
     sm = np.load(os.path.join(orig_dir, '_'.join(['sm',file_id,'original'])))
@@ -125,8 +130,8 @@ def init_signal(dsize,  master_q = 'tcdirac-master'):
         in_q.delete_message(m)
         settings = json.loads(m.get_body())
         cq = conn.get_queue( settings['command'] )
+        m = Message(body=get_gpu_message(dsize))
         cq.write(m)
-        time.sleep(10)
         print "settings"
         settings['master_q'] = master_q
         with open('settings.json', 'w') as s:
@@ -371,6 +376,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('run_level', help="0:run, 1:load balance, 2:terminate, 3:cleanup")
     arg = parser.parse_args()
-    num_data = 200 
+    num_data = 20
     (RUN, LOAD_BALANCE, TERMINATE, CLEANUP) = range(4)
-    runTest(num_data, level=arg.run_level)
+    runTest(num_data, level=int(arg.run_level))
