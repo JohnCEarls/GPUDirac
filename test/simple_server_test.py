@@ -58,8 +58,8 @@ def runTest(num_data, level=0 ):
             raise Exception("Shit on terminate")
         terminate_signal( settings['command'] ) 
     elif level == 3:
-    sqs_cleanup()
-    s3_cleanup(bucket= 'tcdirac-togpu-00')    
+        sqs_cleanup()
+        s3_cleanup(bucket= 'tcdirac-togpu-00')    
 
 def push_data(num_data):
 
