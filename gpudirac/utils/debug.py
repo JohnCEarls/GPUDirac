@@ -119,8 +119,6 @@ def startLogger():
     config = ConfigParser.ConfigParser()
     config.read(args.config)
     log_dir = config.get('directories', 'log')
-    botoLogger = logging.getLogger('boto')
-    botoLogger.setLevel(logging.WARNING)
 
     LOG_FILENAME = "gpudirac-logserver.log"
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -138,6 +136,8 @@ def startLogger():
 def initLogging(server='localhost', port=logging.handlers.DEFAULT_TCP_LOGGING_PORT, server_level=static.logging_server_level, sys_out_level=static.logging_stdout_level):
     rootLogger = logging.getLogger('')
     rootLogger.setLevel(logging.DEBUG)
+    botoLogger = logging.getLogger('boto')
+    botoLogger.setLevel(logging.WARNING)
     socketHandler = logging.handlers.SocketHandler(server, port)
     socketHandler.setLevel(server_level)
     rootLogger.addHandler(socketHandler)
