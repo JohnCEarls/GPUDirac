@@ -57,31 +57,39 @@ class Dirac:
         self.sqs = {'source':None, 'results':None, 'command': self.name + '-command' , 'response': self.name + '-response' }
         self.directories = directories
         self._terminating = 0
-        #terminating is state machine
-        #see - _terminator for mor info
-        self._makedirs()
-        self._get_settings( init_q )
-        try:
-            self._init_subprocesses()
-        except:
-            self.logger.error("Error on creation of subprocesses, cleanup resources and reraise")
-            raise
         #counters
         self._hb = 0#heartbeat counter
         self._tcount = 0
         self.ctx = None
-        def sigterm_hander(*args):
+        #terminating is state machine
+        #see - _terminator for mor info
+        def sigterm_handler(*args):
+            print "in sth"
             logger = logging.getLogger("SIGTERM_HANDLER")
             logger.critical("Recd SIGTERM")
             try:
                 conn = boto.sqs.connect_to_region( 'us-east-1' )
                 command_q = conn.get_queue(self.sqs['command'] )
+                parsed = {}
                 parsed['message-type'] = 'termination-notice'
                 command_q.write(Message(body=json.dumps(parsed)))
                 logger.critical("Sending termination notice to command queue")
             except:
                 logger.exception("Error during attempted termination")
-            sys.exit()
+            #sys.exit()
+        signal.signal(signal.SIGTERM, sigterm_handler)
+        self._makedirs()
+        self._get_settings( init_q )
+        try:
+            self._init_subprocesses()
+        except:
+            self.logger.exception("Error on creation of subprocesses, cleanup resources")
+            try:
+                self.logger.warning("Attempting Hard Cleanup")
+                self._hard_clean_up()
+
+            except:
+                self.logger.exception("Hard cleanup failed")
 
     def set_logging_level(self, level):
         self.logger.setLevel(level)
@@ -90,6 +98,9 @@ class Dirac:
         """
         The main entry point
         """
+        if self._terminating != 0:
+            self.logger.critical("Attempted to run, but terminating was set.")
+            return
         try:
             self.logger.info("Entering main[run()] process.")
             self._init_gpu()
@@ -178,13 +189,25 @@ class Dirac:
         #one means soft kill on retriever, so hopefully the pipeline will runout
         self._terminating = 5
         self.logger.warning("Killing Retriever")
-        self._hard_kill_retriever()
+        try:
+            self._hard_kill_retriever()
+        except AttributeError:
+            self.logger.error("no retrievers to kill")
         self.logger.warning("Killing Loader")
-        self._loaderq.kill_all()
+        try:
+            self._loaderq.kill_all()
+        except AttributeError:
+            self.logger.error("no loaders to kill")
         self.logger.warning("Killing Packer")
-        self._packerq.kill_all()
+        try:
+            self._packerq.kill_all()
+        except AttributeError:
+            self.logger.error("no packers to kill")
         self.logger.warning("Killing Poster")
-        self._hard_kill_poster()
+        try:
+            self._hard_kill_poster()
+        except AttributeError:
+            self.logger.error("no posters to kill")
         self.logger.warning("Death to Smoochie")
 
     def _check_commands(self):
@@ -205,12 +228,15 @@ class Dirac:
         """
         if command['message-type'] == 'termination-notice':
             #master says die
-            self.logger.warning("%s: received termination notice" % self.name)
+            self.logger.warning("received termination notice")
             self._terminating = 1
             self._terminator()
         if command['message-type'] == 'load-balance':
             self.logger.info(str(command))
             self._handle_load_balance(command)
+        if command['message-type'] == 'init-settings':
+            self.logger.info(str(command))
+            self._set_settings( command )
 
     def _handle_load_balance(self, command):
         """
@@ -373,24 +399,34 @@ class Dirac:
         md =  boto.utils.get_instance_metadata()
         self._availabilityzone = md['placement']['availability-zone']
         self._region = self._availabilityzone[:-1]
-        message = {'message-type':'gpu-init', 'name': self.name, 'instance-id': md['instance-id'], 'command' : self.sqs['command'], 'response' : self.sqs['response'], 'zone':self._availabilityzone }
+        message = {'message-type':'gpu-init', 
+                'name': self.name,
+                'instance-id': md['instance-id'], 
+                'command' : self.sqs['command'], 
+                'response' : self.sqs['response'], 
+                'zone':self._availabilityzone }
         m = Message(body=json.dumps(message))
         init_q.write( m )
         command_q = conn.get_queue( self.sqs['command'] )
         command = None
         ctr = 0
-        while command is None and ctr < 100:
+        while command is None:
             command = command_q.read(  wait_time_seconds=20 ) 
             if command is None:
                 self.logger.warning("No instructions in [%s]"%self.sqs['command'])
             ctr += 1
+        
         if command is None:
             self.logger.error("Attempted to retrieve setup and no instructions received.")
             raise Exception("Waited 200 seconds and no instructions, exitting.")
+        self.logger.debug("Init Message %s", command.get_body())
         parsed = json.loads(command.get_body())
-        self._set_settings( parsed ) 
         command_q.delete_message( command )
-        self.logger.debug("sqs< %s > s3< %s > ds< %s > gpu_id< %s >" % (str(self.sqs), str(self.s3), str(self.data_settings), str(self.gpu_id)) )
+        self._handle_command(parsed)
+        try:
+            self.logger.debug("sqs< %s > s3< %s > ds< %s > gpu_id< %s >" % (str(self.sqs), str(self.s3), str(self.data_settings), str(self.gpu_id)) )
+        except AttributeError:
+            self.logger.exception("Probably terminated before initialization")
 
     def _set_settings( self, command):
         """
@@ -519,6 +555,8 @@ class Dirac:
         """
         This cleans up anything that did not end gracefully
         """
+        if self._terminating == 0:
+            self._terminating = 5
         self.logger.info("Hard Cleanup routine")
         self._delete_command_queues()
         for c in multiprocessing.active_children():
@@ -567,4 +605,15 @@ def main():
     
 if __name__ == "__main__":
     #debug.initLogging()
-    mockMaster()
+    import ConfigParser
+    import os, os.path
+    config = ConfigParser.ConfigParser()
+    conf = '/home/sgeadmin/.local/bin/config.cfg'
+    config.read(conf)
+    directories = {}
+    for t in ['source','results','log']:
+        directories[t] =os.path.expanduser(config.get('directories',t))
+    init_q = config.get('queues', 'init_q')
+    debug.initLogging()
+    d = Dirac( directories, init_q )
+    d.run()

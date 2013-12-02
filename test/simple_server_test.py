@@ -60,6 +60,9 @@ def runTest(num_data, level=0 ):
     elif level == 3:
         sqs_cleanup()
         s3_cleanup(bucket= 'tcdirac-togpu-00')    
+    elif level == 4:
+        print "Generating %i data sets" % num_data
+        just_data(num_data)
 
 def push_data(num_data):
 
@@ -67,6 +70,7 @@ def push_data(num_data):
     working_dir = '/scratch/sgeadmin/working'
     orig_dir = '/scratch/sgeadmin/original'
     parsed = {}
+    parsed['message-type'] = 'init-settings'
     parsed['result-sqs'] = 'tcdirac-from-gpu-00'
     parsed['source-sqs'] = 'tcdirac-to-gpu-00'
     parsed['source-s3'] = 'tcdirac-togpu-00'
@@ -78,14 +82,29 @@ def push_data(num_data):
         os.makedirs(orig_dir)
     ps = []
     np = 10
-    for i in range(np):
-        p = Process(target=afdq, args = (working_dir, orig_dir, block_sizes, (num_data/np) + 1, parsed))
-        p.start()
-        ps.append(p)
     dsize = afdq(working_dir, orig_dir, block_sizes, (num_data/np) + 1, parsed)
     for p in ps:
         p.join()
     return dsize
+
+def just_data(num_data):
+    ps = []
+    np = 10
+    block_sizes = (32,16,8)
+    working_dir = '/scratch/sgeadmin/working'
+    orig_dir = '/scratch/sgeadmin/original'
+    parsed = {}
+    parsed['message-type'] = 'init-settings'
+    parsed['result-sqs'] = 'tcdirac-from-gpu-00'
+    parsed['source-sqs'] = 'tcdirac-to-gpu-00'
+    parsed['source-s3'] = 'tcdirac-togpu-00'
+    parsed['result-s3'] = 'tcdirac-fromgpu-00'
+    for i in range(np):
+        p = Process(target=afdq, args = (working_dir, orig_dir, block_sizes, (num_data/np) + 1, parsed))
+        p.start()
+        ps.append(p)
+    for p in ps:
+        p.join()
 
 def afdq(working_dir, orig_dir, block_sizes, num_data, parsed):
     dsize, file_list = addFakeDataQueue(working_dir, orig_dir, block_sizes, num_data)
@@ -134,6 +153,7 @@ def init_signal(dsize,  master_q = 'tcdirac-master'):
         cq.write(m)
         print "settings"
         settings['master_q'] = master_q
+        settings['dsize'] = dsize
         with open('settings.json', 'w') as s:
             s.write(json.dumps( settings ))
     except:
@@ -168,6 +188,7 @@ def get_lb_messages():
 
 def get_gpu_message(dsize):
     parsed = {}
+    parsed['message-type'] = 'init-settings'
     parsed['result-sqs'] = 'tcdirac-from-gpu-00'
     parsed['source-sqs'] = 'tcdirac-to-gpu-00'
     parsed['source-s3'] = 'tcdirac-togpu-00'
@@ -303,7 +324,8 @@ def genFakeData( n, gn):
 
 def load_data_s3(file_list, working_dir, in_s3_bucket):
     conn = boto.connect_s3()
-    bucket = conn.create_bucket(in_s3_bucket)
+    #going to assume bucket already exists
+    bucket = conn.get_bucket(in_s3_bucket)
     for f_dict in file_list:
         for k, f_name in f_dict.iteritems():
             if k in ['em','gm','sm','nm']:
@@ -374,8 +396,8 @@ def testDirac(expression_matrix, gene_map, sample_map, network_map):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('run_level', help="0:run, 1:load balance, 2:terminate, 3:cleanup")
+    parser.add_argument('run_level',
+             help="0:run, 1:load balance, 2:terminate, 3:cleanup, 4:add data")
     arg = parser.parse_args()
     num_data = 20
-    (RUN, LOAD_BALANCE, TERMINATE, CLEANUP) = range(4)
     runTest(num_data, level=int(arg.run_level))
