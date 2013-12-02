@@ -119,6 +119,8 @@ def startLogger():
     config = ConfigParser.ConfigParser()
     config.read(args.config)
     log_dir = config.get('directories', 'log')
+    botoLogger = logging.getLogger('boto')
+    botoLogger.setLevel(logging.WARNING)
 
     LOG_FILENAME = "gpudirac-logserver.log"
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -153,6 +155,4 @@ if __name__ == "__main__":
         logging.error("test")
         logger = logging.getLogger("test1-new")
         logger.error("test")
-
-
 
