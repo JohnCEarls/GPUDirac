@@ -104,7 +104,7 @@ def test_accuracy(orig_dir,  sqs_queue, s3_bucket, num_tests):
         rms = np.load( result_file )
         test = compare_serial_rms( orig_dir, res['file_id'], rms)
         print "Test", res['file_id'], "passed" if test else "failed"
-        
+
 def compare_serial_rms(orig_dir, file_id, rms_buffer)
     exp = np.load(os.path.join(orig_dir, '_'.join(['em',file_id,'original'])))
     nm = np.load(os.path.join(orig_dir, '_'.join(['nm',file_id,'original'])))
@@ -113,8 +113,6 @@ def compare_serial_rms(orig_dir, file_id, rms_buffer)
 
     _,_, rms = testDirac(em, gm, sm, nm)
     return np.allclose(rms, rms_buffer[:rms.shape[0],:rms.shape[1]])
-    
-
 
 def init_signal(dsize,  master_q = 'tcdirac-master'):
     try:
@@ -127,11 +125,7 @@ def init_signal(dsize,  master_q = 'tcdirac-master'):
         in_q.delete_message(m)
         settings = json.loads(m.get_body())
         cq = conn.get_queue( settings['command'] )
-
-        m = Message(body=get_gpu_message(dsize))
-
         cq.write(m)
-
         time.sleep(10)
         print "settings"
         settings['master_q'] = master_q
@@ -147,7 +141,7 @@ def terminate_signal( command_q ):
     conn = boto.sqs.connect_to_region( 'us-east-1' )
     cq = conn.get_queue( command_q )
     cq.write( Message(body=get_terminate_message()))
-    
+
 def load_balance_signal( command_q ):
     conn = boto.sqs.connect_to_region( 'us-east-1' )
     cq = conn.get_queue( command_q )
@@ -177,16 +171,13 @@ def get_gpu_message(dsize):
     ds = []
     for k in ['em', 'gm', 'sm', 'nm']:
         ds.append( (k, dsize[k], dtypes.to_index(dtype[k])))
-
     parsed['data-settings'] = {'source':ds}
     ds = [('rms', dsize['rms'], dtypes.to_index(dtype['rms'])) ]
     parsed['data-settings']['results'] = ds
     parsed['gpu-id'] = 0
-
     parsed['sample-block-size'] = 32
     parsed['pairs-block-size'] = 16
     parsed['nets-block-size'] = 8
-
     parsed['heartbeat-interval'] = 10
     return json.dumps(parsed)
 
@@ -246,11 +237,9 @@ def addFakeDataQueue(in_dir,orig_dir, block_sizes, num_data):
                 f_name = '_'.join([ k, f_dict['file_id'], f_hash])
                 with open(os.path.join( in_dir, f_name),'wb') as f:
                     np.save(f, v)
-                
                 if v.size > dsize[k]:
                     dsize[k] = v.size
                 f_dict[k] = f_name
-
             rms_buffer_data_size = int(buffer_nnets * buffer_nsamp * np.float32(1).nbytes * 3.1) #10% bigger than needed
             if rms_buffer_data_size > dsize['rms']:
                dsize['rms'] = rms_buffer_data_size 
@@ -358,7 +347,7 @@ def testDirac(expression_matrix, gene_map, sample_map, network_map):
             else:
                 srt[j,i] = 0
     rt = np.zeros_like(srt)
-    
+
     for i in range(expression_matrix.shape[1]):
         neigh = sample_map[i,:]
         t = srt[:,neigh].sum(axis=1)
@@ -370,21 +359,18 @@ def testDirac(expression_matrix, gene_map, sample_map, network_map):
         for j in range(gene_map.shape[0]/2):
             rms_matrix[j,i] = int(rt[j,i] == srt[j,i])
     rms_final = np.zeros((len(network_map) - 1 , expression_matrix.shape[1]))
-    
+
     for i in range(len(network_map) - 1):
         nstart = network_map[i]
         nend = network_map[i+1]
         rms_final[i,:] = rms_matrix[nstart:nend, :].sum(axis=0)/float(nend-nstart)
     return srt, rt, rms_final
 
-                
-
-    
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('run_level', help="0:run, 1:load balance, 2:terminate, 3:cleanup")
+    arg = parser.parse_args()
     num_data = 200 
     (RUN, LOAD_BALANCE, TERMINATE, CLEANUP) = range(4)
-    #s3_cleanup()
-    runTest(num_data, level=TERMINATE)
-    #runTest(num_data, level=RUN)
-    #runTest(num_data, level=LOAD_BALANCE)
-    #runTest(num_data, level=CLEANUP)
+    runTest(num_data, level=arg.run_level)

@@ -1,4 +1,6 @@
 import time
+import signal
+import sys
 import os, os.path
 from multiprocessing import Queue,Process
 import multiprocessing
@@ -68,6 +70,18 @@ class Dirac:
         self._hb = 0#heartbeat counter
         self._tcount = 0
         self.ctx = None
+        def sigterm_hander(*args):
+            logger = logging.getLogger("SIGTERM_HANDLER")
+            logger.critical("Recd SIGTERM")
+            try:
+                conn = boto.sqs.connect_to_region( 'us-east-1' )
+                command_q = conn.get_queue(self.sqs['command'] )
+                parsed['message-type'] = 'termination-notice'
+                command_q.write(Message(body=json.dumps(parsed)))
+                logger.critical("Sending termination notice to command queue")
+            except:
+                logger.exception("Error during attempted termination")
+            sys.exit()
 
     def set_logging_level(self, level):
         self.logger.setLevel(level)
@@ -533,6 +547,7 @@ class Dirac:
                         if ctr >= 10:
                             self.logger.error("failed to create directory too many times." )
                             raise
+
 def main():
     import argparse
     import ConfigParser

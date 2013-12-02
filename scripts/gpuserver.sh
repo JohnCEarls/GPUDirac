@@ -14,8 +14,8 @@
 DIR=/home/sgeadmin/.local/bin
 DAEMON=$DIR/gpudirac
 CONFIG_OPTS="-c $DIR/config.cfg"
-DAEMON_NAME=gpulogger
- 
+DAEMON_NAME=gpuserver
+
 # This next line determines what user the script runs as.
 # Root generally not recommended but necessary if you are using the Raspberry Pi GPIO from Python.
 DAEMON_USER=sgeadmin
@@ -32,7 +32,7 @@ do_start () {
 }
 do_stop () {
     log_daemon_msg "Stopping system $DAEMON_NAME daemon"
-    start-stop-daemon --stop --pidfile $PIDFILE --retry 10
+    start-stop-daemon --stop --pidfile $PIDFILE --retry 20
     log_end_msg $?
 }
 
