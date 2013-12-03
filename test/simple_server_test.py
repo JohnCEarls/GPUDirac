@@ -41,7 +41,7 @@ def runTest(num_data, level=0 ):
         dsize = push_data()
         print "sending init signal"
         init_signal(dsize)
-        just_data( num_data )
+        #just_data( num_data )
     elif level == 1:
         print "Load Balance starting"
         #load balance
