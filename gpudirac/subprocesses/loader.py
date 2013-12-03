@@ -4,6 +4,7 @@ import hashlib
 import random
 import os, os.path
 from multiprocessing import Process, Queue, Value, Event, Array
+import multiprocessing
 from Queue import Empty
 
 import numpy as np
@@ -30,13 +31,14 @@ def kill_all(name, loaders, _ld_die_evt, loader_dist, file_q):
         dead = False
         count = 1
         while not dead:
-            time.sleep(1)
             dead = True 
             if _ld_die_evt.is_set():
                 dead = False
             for l in loaders.itervalues():
                 if l.events['die'].is_set():
                     dead = False
+            count += 1
+            time.sleep(.5)
             if count >= 10:
                 logger.error("Terminator: Unable to clear queues")
                 return
@@ -92,23 +94,22 @@ class LoaderQueue:
             self._bosses[-1].set_add_data()
             self.add_loader_boss( num - 1)
 
-    def next_loader_boss(self, time_out=0.1, max_depth=None):
-        if len(self._bosses) == 0:
-            raise Exception("No Loaders")
+    def next_loader_boss(self, time_out=0.1, max_depth=None, curr_ptr=None):
         if max_depth is None:
             max_depth = 2*len(self._bosses)#default max_depth to 2 passes of the queue
-            self.logger.debug( "Max depth set[%i]", max_depth) 
-        if max_depth <= 0:
-            self.logger.debug("Exceeded Max Depth")
-            raise MaxDepth("Max Depth exceeded")            
-
-        self._curr = (self._curr + 1)%len(self._bosses)
-        if self._bosses[self._curr].wait_data_ready(time_out=time_out):
-            self._bosses_skip[self._curr] = 0
-            return self._bosses[self._curr]
-        else:
-            self._bosses_skip[self._curr] += 1
-            return self.next_loader_boss(time_out, max_depth=max_depth-1)
+        ctr = 0
+        curr = self._curr + 1
+        l = len(self._bosses)
+        while ctr < max_depth:
+            i = (curr+ctr)%l
+            if self._bosses[i].wait_data_ready(time_out=time_out):
+                self._curr = i
+                self._bosses_skip[i] = 0
+                return self._bosses[i]
+            else:
+                self._bosses_skip[i] += 1
+                ctr+=1
+        return None
 
     def checkSkip(self, max_skip=3):
         over_limit = [i for i,l in enumerate(self._bosses_skip) if l > max_skip]
@@ -245,7 +246,8 @@ class LoaderBoss:
         """
         Kills all subprocesses
         """
-        self._terminator.start()
+        if not self._terminator.is_alive():
+            self._terminator.start()
 
     def set_add_data(self, key=None):
         """
@@ -335,17 +337,19 @@ class LoaderBoss:
         for l in self.loaders.itervalues():
             if l.process.is_alive():
                 l.process.terminate()
-            l.process.join()
+            l.process.join(2)
             temp_l = l
         self.logger.debug("loaders joined")
-      
         if self.loader_dist.is_alive():
             self.loader_dist.terminate()
-        self.loader_dist.join()
+        self.loader_dist.join(2)
         self.logger.debug("loader_dist joined")
         if self._terminator.is_alive():
             self._terminator.terminate()
-        self._terminator.join()
+        still = True
+        for p in multiprocessing.active_children():
+            p.terminate()
+
 
     def is_alive(self):
         for l in self.loaders.itervalues():
@@ -444,7 +448,7 @@ class LoaderDist(Process):
                     self.logger.debug("%s: sleeping due to full q"%self.name)
                     time.sleep(1)
             except Empty:#thrown by in_#thrown by in_qq
-                self.logger.debug("%s: starving..."%self.name)
+                #self.logger.debug("%s: starving..."%self.name)
                 pass
         self.evt_death.clear()
         self.logger.info("%s: exiting..." % (self.name,))
@@ -552,6 +556,15 @@ class Loader(Process):
                             self.evt_die.clear()
                             self.logger.info(" exiting... " )  
                             return
+                    except IOError:
+                        self.logger.exception("This probably means a signal was recd \
+                                        while on timeout.")
+                        if self.evt_die.is_set():
+                            self.evt_die.clear()
+                            self.logger.info(" exiting... " )  
+                            return
+                        else:
+                            raise
                 self.logger.debug(" new file <%s>" %(fname))
                 old_md5 = new_md5
                 new_md5 = self._get_md5(fname)

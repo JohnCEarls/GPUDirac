@@ -64,7 +64,6 @@ class Dirac:
         #terminating is state machine
         #see - _terminator for mor info
         def sigterm_handler(*args):
-            print "in sth"
             logger = logging.getLogger("SIGTERM_HANDLER")
             logger.critical("Recd SIGTERM")
             try:
@@ -108,7 +107,7 @@ class Dirac:
             self.logger.debug("starting main loop.")
             while self._terminating < 5:
                 res = self._main()
-                self._heartbeat()
+                self._heartbeat(force = (not res))
         except:
             self.logger.exception("exception, attempting cleanup" ) 
             if self._terminating < 5:#otherwise we've already tried this
@@ -134,12 +133,10 @@ class Dirac:
         #get next available data
         #avoiding logging for the main process
         #lean and mean
-        try:
-            db = self._loaderq.next_loader_boss()
-        except MaxDepth:
-            self.logger.warning("LoaderBoss has no work")
+        db = self._loaderq.next_loader_boss()
+        if db is None:
             return False
-
+        self.logger.debug("have data")
         db.clear_data_ready()
         expression_matrix = db.get_expression_matrix()
         gene_map = db.get_gene_map()
@@ -158,9 +155,11 @@ class Dirac:
         db.set_add_data()
         #handle output
         pb = self._packerq.next_packer_boss()
+        self.logger.debug("writing to packer")
         rms.fromGPU( pb.get_mem() )
         pb.set_meta(file_id , ( rms.buffer_nnets, rms.buffer_nsamples ))
-        pb.release() 
+        pb.release()
+        self.logger.debug("<%s> processed and sent to <%s>" %(file_id, pb.name))
         return True
 
     def _heartbeat(self, force=False):
@@ -191,23 +190,23 @@ class Dirac:
         self.logger.warning("Killing Retriever")
         try:
             self._hard_kill_retriever()
-        except AttributeError:
-            self.logger.error("no retrievers to kill")
+        except:
+            self.logger.exception("no retrievers to kill")
         self.logger.warning("Killing Loader")
         try:
             self._loaderq.kill_all()
-        except AttributeError:
-            self.logger.error("no loaders to kill")
+        except:
+            self.logger.exception("no loaders to kill")
         self.logger.warning("Killing Packer")
         try:
             self._packerq.kill_all()
-        except AttributeError:
-            self.logger.error("no packers to kill")
+        except:
+            self.logger.exception("no packers to kill")
         self.logger.warning("Killing Poster")
         try:
             self._hard_kill_poster()
-        except AttributeError:
-            self.logger.error("no posters to kill")
+        except:
+            self.logger.exception("no posters to kill")
         self.logger.warning("Death to Smoochie")
 
     def _check_commands(self):

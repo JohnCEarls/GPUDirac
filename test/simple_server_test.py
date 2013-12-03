@@ -38,9 +38,10 @@ def runTest(num_data, level=0 ):
     if level == 0:
         #creates data and starts server
         print "Run starting"
-        dsize = push_data( num_data)
+        dsize = push_data()
         print "sending init signal"
         init_signal(dsize)
+        just_data( num_data )
     elif level == 1:
         print "Load Balance starting"
         #load balance
@@ -59,12 +60,13 @@ def runTest(num_data, level=0 ):
         terminate_signal( settings['command'] ) 
     elif level == 3:
         sqs_cleanup()
-        s3_cleanup(bucket= 'tcdirac-togpu-00')    
+        s3_cleanup(bucket= 'tcdirac-togpu-00')
+        s3_cleanup(bucket= 'tcdirac-fromgpu-00')
     elif level == 4:
         print "Generating %i data sets" % num_data
         just_data(num_data)
 
-def push_data(num_data):
+def push_data():
 
     block_sizes = (32,16,8)
     working_dir = '/scratch/sgeadmin/working'
@@ -81,10 +83,7 @@ def push_data(num_data):
     if not os.path.exists(orig_dir):
         os.makedirs(orig_dir)
     ps = []
-    np = 10
-    dsize = afdq(working_dir, orig_dir, block_sizes, (num_data/np) + 1, parsed)
-    for p in ps:
-        p.join()
+    dsize = afdq(working_dir, orig_dir, block_sizes, 10, parsed)
     return dsize
 
 def just_data(num_data):
@@ -361,6 +360,7 @@ def sqs_cleanup():
 def s3_cleanup(bucket= 'tcdirac-togpu-00'):
     conn = boto.connect_s3()
     b = conn.get_bucket(bucket)
+    print b.get_all_keys()
     b.delete_keys(b.get_all_keys())
 
 def testDirac(expression_matrix, gene_map, sample_map, network_map):
@@ -399,5 +399,5 @@ if __name__ == "__main__":
     parser.add_argument('run_level',
              help="0:run, 1:load balance, 2:terminate, 3:cleanup, 4:add data")
     arg = parser.parse_args()
-    num_data = 20
+    num_data = 200
     runTest(num_data, level=int(arg.run_level))

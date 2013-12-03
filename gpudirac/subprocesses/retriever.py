@@ -26,7 +26,7 @@ class Retriever(Process):
         self.name = name
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
-        self.logger.debug( "Init: in_dir<%s> sqs_name<%s> s3bucket_name<%s> max_q_size<%i>", (in_dir, sqs_name, s3bucket_name, max_q_size) )
+        self.logger.debug( "Init: in_dir<%s> sqs_name<%s> s3bucket_name<%s> max_q_size<%i>"% (in_dir, sqs_name, s3bucket_name, max_q_size) )
         self.q_ret2gpu = q_ret2gpu
         self.sqs_name = sqs_name
         self._sqs_q = self._connect_sqs()
@@ -94,7 +94,7 @@ class Retriever(Process):
             k.key = file_name
             k.get_contents_to_filename( os.path.join(self.in_dir, file_name) )
         except:
-            logging.exception("Error on attempt to copy S3:/%s/%s to %s]" %(self._s3_bucket.name, self.file_name, os.path.join(self.in_dir, file_name) ))
+            logging.exception("Error on attempt to copy S3:/%s/%s to %s]" %(self._s3_bucket.name, file_name, os.path.join(self.in_dir, file_name) ))
             raise
 
 
@@ -107,7 +107,7 @@ class RetrieverQueue:
         self.name = name
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
-        self.logger.debug( "Init: in_dir<%s> sqs_name<%s> s3bucket_name<%s> max_q_size<%i>", (in_dir, sqs_name, s3bucket_name) )
+        self.logger.debug( "Init: in_dir<%s> sqs_name<%s> s3bucket_name<%s>"% (in_dir, sqs_name, s3bucket_name) )
         self.in_dir = in_dir
         self.q_ret2gpu= q_ret2gpu
         self.sqs_name = sqs_name

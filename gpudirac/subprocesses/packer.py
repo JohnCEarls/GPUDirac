@@ -46,7 +46,8 @@ class PackerQueue:
         if max_depth is None:
             max_depth = 2*len(self._bosses)#default max_depth to 2 passes of the queue
         if max_depth <= 0:
-            raise MaxDepth("Max Depth exceeded")
+            self.logging.critical("Maxing out depth, adding packer")
+            self.add_packer_boss()
 
         self._curr = (self._curr + 1)%len(self._bosses)
         if self._bosses[self._curr].ready():

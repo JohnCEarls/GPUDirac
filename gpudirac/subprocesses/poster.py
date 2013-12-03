@@ -25,7 +25,7 @@ class Poster(Process):
         Process.__init__(self, name=name)
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
-        self.logger.debug( "Init: out_dir<%s> sqs_name<%s> s3bucket_name<%s>", (out_dir, sqs_name, s3bucket_name) )
+        self.logger.debug( "Init: out_dir<%s> sqs_name<%s> s3bucket_name<%s>" % (out_dir, sqs_name, s3bucket_name) )
         self.q_gpu2s3 = q_gpu2s3
         self.sqs_name = sqs_name
         self.in_dir = in_dir
@@ -52,7 +52,7 @@ class Poster(Process):
             self._sqs_q.write( m )
             self._delete_message( f_info['file_id'] )
         except Empty:
-            self.logger.info("starving")
+            #self.logger.info("starving")
             if self.evt_death.is_set():
                 self.logger.info("Exiting...")
                 return
@@ -90,7 +90,7 @@ class PosterQueue:
         self.name = name
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
-        self.logger.debug( "Init: out_dir<%s> sqs_name<%s> s3bucket_name<%s>", (out_dir, sqs_name, s3bucket_name) )
+        self.logger.debug( "Init: out_dir<%s> sqs_name<%s> s3bucket_name<%s>"% (out_dir, sqs_name, s3bucket_name) )
         self.out_dir = out_dir
         self.q_gpu2s3= q_gpu2s3
         self.sqs_name = sqs_name
@@ -142,8 +142,7 @@ class PosterQueue:
                 p.join(.5)    
             d.clear()
             self.logger.warning("Repairing poster<%i>" % i)
-            self._posters[i] =  Poster(self.name + "_p" + str(i)+"_repaired", self.out_dir,  self.q_gpu2s3, d, self.sqs_name, self.s3bucket_name)
-            
+            self._posters[i] =  Poster(self.name + "_" + str(i)+"_repaired", self.out_dir,  self.q_gpu2s3, d, self.sqs_name, self.s3bucket_name)
 
     def _sp_alive(self):
         for d in self._reaper:
