@@ -35,6 +35,7 @@ class Retriever(Process):
         self.in_dir = in_dir
         self.evt_death = evt_death
         self.max_q_size = max_q_size
+        self.bad_file_cache = {}
         
     def run(self):
         while not self.evt_death.is_set():
@@ -48,19 +49,30 @@ class Retriever(Process):
         """
         Does the work
         """
-        messages = self._sqs_q.get_messages(10, visibility_timeout=200)
+        messages = self._sqs_q.get_messages(2, visibility_timeout=20)
         m_count = 0
         for message in messages:
             try:
                 m = json.loads(message.get_body())
+                error = False 
                 for f in m['f_names']:
-                    self.download_file( f )
-                    self.logger.debug("Downloaded <%s>" % f)
-                    m[f[:2]] = f
-                self._write_receipt_handle( m['file_id'], message.receipt_handle )
+                    if self.download_file( f ):
+                        self.logger.debug("Downloaded <%s>" % f)
+                        m[f[:2]] = f
+                        self._write_receipt_handle( m['file_id'], message.receipt_handle )
 
+                    else:
+                        
+                        self.logger.warning("FileMissing: <%s> does not exist on s3" % f)
+                        if f in self.bad_file_cache and Message is not None:
+                            #seen this bad file before, fool me once ...
+                            self._sqs_q.delete_message(message)
+                            #so another file in the package does not try to  delete the message
+                        else:
+                            self.bad_file_cache[f] = 1
+                            message = None
                 cont = True
-                while cont:
+                while cont and message is not None:
                     try:
                         self.q_ret2gpu.put( m, timeout=10 )
                         cont = False
@@ -68,7 +80,6 @@ class Retriever(Process):
                         self.logger.warning("queue_full" )
                         if self.evt_death.is_set():
                             return m_count
-                #self._sqs_q.delete_message(message)
                 m_count += 1
             except:
                 self.logger.exception("While trying to download files" )                
@@ -79,25 +90,23 @@ class Retriever(Process):
             rhf.write(handle)
 
     def _connect_s3(self):
-        conn = boto.connect_s3()        
+        conn = boto.connect_s3()
         b = conn.get_bucket( self.s3bucket_name )
         return b
 
     def _connect_sqs(self):
         conn = boto.sqs.connect_to_region('us-east-1')
-        q = conn.create_queue( self.sqs_name )
+        q = conn.get_queue( self.sqs_name )
         return q
 
     def download_file(self, file_name):
-        try:
-            k = Key(self._s3_bucket)
-            k.key = file_name
+        k = Key(self._s3_bucket)
+        k.key = file_name
+        if k.exists():
             k.get_contents_to_filename( os.path.join(self.in_dir, file_name) )
-        except:
-            logging.exception("Error on attempt to copy S3:/%s/%s to %s]" %(self._s3_bucket.name, file_name, os.path.join(self.in_dir, file_name) ))
-            raise
-
-
+            return True
+        else:
+            return False
 
 class RetrieverQueue:
     """
