@@ -32,14 +32,13 @@ import pandas
 
 import pycuda.driver as cuda
 
-
 def runTest(num_data, level=0 ):
     #parser.add_argument('run_level', help="0:run, 1:load balance, 2:terminate, 3:cleanup")
     if level == 0:
         #creates data and starts server
         print "Run starting"
         dsize = push_data()
-        print "sending init signal"
+        print "sending init signal, with %i initial data" % num_data
         init_signal(dsize)
         #just_data( num_data )
     elif level == 1:
@@ -65,6 +64,14 @@ def runTest(num_data, level=0 ):
     elif level == 4:
         print "Generating %i data sets" % num_data
         just_data(num_data)
+    elif level == 5:
+        print "Testing Results"
+        print "Running %i tests" % num_data
+        orig_dir = "/scratch/sgeadmin/original"
+        test_dir = "/scratch/sgeadmin/test"
+        sqs_queue = "tcdirac-from-gpu-00"
+        s3_bucket = "tcdirac-fromgpu-00"
+        test_accuracy(orig_dir, test_dir, sqs_queue, s3_bucket, num_data)
 
 def push_data():
 
@@ -110,32 +117,6 @@ def afdq(working_dir, orig_dir, block_sizes, num_data, parsed):
     load_data_s3( file_list, working_dir, parsed['source-s3'])
     load_data_sqs( file_list,parsed['source-sqs'] )
     return dsize
-
-def test_accuracy(orig_dir,  sqs_queue, s3_bucket, num_tests):
-    s3 = boto.connect_s3()
-    sqs = boto.connect_sqs()
-    bucket = s3.get_bucket(s3_bucket)
-    my_queue = sqs.get_queue(sqs_queue)
-    while num_tests > 0:
-        num_tests -= 1
-        for m in my_queue.get_messages():
-            res = json.loads(m.get_body())
-            my_queue.delete_message(m)
-        k = bucket.get_key(res['f_name'] ) 
-        result_file = os.path.join( orig_dir, res['f_name'])
-        k.get_contents_to_filename( result_file )
-        rms = np.load( result_file )
-        test = compare_serial_rms( orig_dir, res['file_id'], rms)
-        print "Test", res['file_id'], "passed" if test else "failed"
-
-def compare_serial_rms(orig_dir, file_id, rms_buffer):
-    exp = np.load(os.path.join(orig_dir, '_'.join(['em',file_id,'original'])))
-    nm = np.load(os.path.join(orig_dir, '_'.join(['nm',file_id,'original'])))
-    sm = np.load(os.path.join(orig_dir, '_'.join(['sm',file_id,'original'])))
-    gm = np.load(os.path.join(orig_dir, '_'.join(['gm',file_id,'original'])))
-
-    _,_, rms = testDirac(em, gm, sm, nm)
-    return np.allclose(rms, rms_buffer[:rms.shape[0],:rms.shape[1]])
 
 def init_signal(dsize,  master_q = 'tcdirac-master'):
     try:
@@ -292,18 +273,14 @@ def genFakeData( n, gn):
 
     exp = np.random.rand(len(genes),len(samples)).astype(np.float32)
     exp_df = pandas.DataFrame(exp,dtype=float, index=genes, columns=samples)
-
     net_map = [0]
-
     for i in range(nnets):
         n_size = random.randint(5,100)
-
         net_map.append(net_map[-1] + scipy.misc.comb(n_size,2, exact=1))
         net = random.sample(genes,n_size)
         for g1,g2 in itertools.combinations(net,2):
             gm_text.append("%s < %s" % (g1,g2))
             gm_idx += [g_d[g1],g_d[g2]]
-
     #data
     expression_matrix = exp
     gene_map = np.array(gm_idx).astype(np.uint32)
@@ -319,7 +296,6 @@ def genFakeData( n, gn):
     data['sm'] = sample_map
     data['nm'] = network_map
     return data
-
 
 def load_data_s3(file_list, working_dir, in_s3_bucket):
     conn = boto.connect_s3()
@@ -357,11 +333,43 @@ def sqs_cleanup():
                 q.delete()    
             except:
                 print "%s: won't delete" % q.name
+
 def s3_cleanup(bucket= 'tcdirac-togpu-00'):
     conn = boto.connect_s3()
     b = conn.get_bucket(bucket)
     print b.get_all_keys()
     b.delete_keys(b.get_all_keys())
+
+##testing output
+
+def test_accuracy(orig_dir, test_dir, sqs_queue, s3_bucket, num_tests):
+    if not os.path.exists(test_dir):
+        os.makedirs(test_dir)
+    s3 = boto.connect_s3()
+    sqs = boto.connect_sqs()
+    bucket = s3.get_bucket(s3_bucket)
+    my_queue = sqs.get_queue(sqs_queue)
+    while num_tests > 0:
+        num_tests -= 1
+        for m in my_queue.get_messages(num_messages=1):
+            res = json.loads(m.get_body())
+            my_queue.delete_message(m)
+        k = bucket.get_key(res['f_name'] ) 
+        result_file = os.path.join( test_dir, res['f_name'])
+        k.get_contents_to_filename( result_file )
+        rms = np.load( result_file )
+        test = compare_serial_rms( orig_dir, test_dir, res['file_id'], rms)
+        print "Test", res['file_id'], "passed" if test else "failed"
+
+def compare_serial_rms(orig_dir, test_dir, file_id, rms_buffer):
+    em = np.load(os.path.join(orig_dir, '_'.join(['em',file_id,'original'])))
+    nm = np.load(os.path.join(orig_dir, '_'.join(['nm',file_id,'original'])))
+    sm = np.load(os.path.join(orig_dir, '_'.join(['sm',file_id,'original'])))
+    gm = np.load(os.path.join(orig_dir, '_'.join(['gm',file_id,'original'])))
+    _,_, rms = testDirac(em, gm, sm, nm)
+    with open(os.path.join(test_dir, '_'.join(['rms',file_id,'serial'])), 'wb') as ser_file:
+        np.save(ser_file, rms)
+    return np.allclose(rms, rms_buffer[:rms.shape[0],:rms.shape[1]])
 
 def testDirac(expression_matrix, gene_map, sample_map, network_map):
     srt = np.zeros((gene_map.shape[0]/2, expression_matrix.shape[1]))
@@ -394,10 +402,14 @@ def testDirac(expression_matrix, gene_map, sample_map, network_map):
     return srt, rt, rms_final
 
 if __name__ == "__main__":
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('run_level',
-             help="0:run, 1:load balance, 2:terminate, 3:cleanup, 4:add data")
+             help="0:run, 1:load balance, 2:terminate, 3:cleanup, 4:add data, 5:test_results")
+    parser.add_argument('--num', help='number for run, add data and test', type=int, default=10)
     arg = parser.parse_args()
-    num_data = 200
+    run_level = arg.run_level
+    num_data = arg.num
     runTest(num_data, level=int(arg.run_level))
+
