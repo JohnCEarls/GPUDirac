@@ -325,7 +325,6 @@ class Dirac:
                 self.logger.exception("Error on removing retriever")
                 raise
 
-
     def _generate_heartbeat_message(self):
         """
         Create a message for master informing current
@@ -377,7 +376,6 @@ class Dirac:
                 self.ctx.pop()
             except:
                 self.logger.error("unable to successfully clear context") 
-
 
     def _get_settings(self, init_q_name):
         """
@@ -526,7 +524,6 @@ class Dirac:
                     self._result_q, self.directories['results'], 
                     data_settings = self.data_settings['results'] )
         self.logger.debug("Subprocesses Initialized" )
-        
 
     def start_subprocesses(self):
         """
@@ -560,7 +557,6 @@ class Dirac:
         #sleeps in posterqueue
         self._posterq.clean_up()
 
-
     def _hard_clean_up(self):
         """
         This cleans up anything that did not end gracefully
@@ -568,7 +564,6 @@ class Dirac:
         if self._terminating == 0:
             self._terminating = 5
         self.logger.info("Hard Cleanup routine")
-        self._delete_command_queues()
         for c in multiprocessing.active_children():
             self.logger.warning("Hard kill [%s]" % c.name)
             c.terminate()
