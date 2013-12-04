@@ -38,7 +38,7 @@ class Retriever(Process):
         self.bad_file_cache = {}
         self.num_messages_pull = 10
         self.visibility_timeout = 60
-       
+
     def run(self):
         while not self.evt_death.is_set():
             if self.q_ret2gpu.qsize() < self.max_q_size:
