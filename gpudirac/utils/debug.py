@@ -52,7 +52,6 @@ class LogRecordStreamHandler(SocketServer.StreamRequestHandler):
     This basically logs the record using whatever logging policy is
     configured locally.
     """
-
     def handle(self):
         """
         Handle multiple requests - each expected to be a 4-byte length,
@@ -119,13 +118,11 @@ def startLogger():
     config = ConfigParser.ConfigParser()
     config.read(args.config)
     log_dir = config.get('directories', 'log')
-
     LOG_FILENAME = "gpudirac-logserver.log"
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logging.basicConfig(  format=log_format)
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-
     handler = logging.handlers.RotatingFileHandler( os.path.join(log_dir,LOG_FILENAME), maxBytes=100*(2**20), backupCount=10)#log 100 MB
     handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger('').addHandler(handler)
@@ -147,8 +144,6 @@ def initLogging(server='localhost', port=logging.handlers.DEFAULT_TCP_LOGGING_PO
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         ch.setFormatter(formatter)
         rootLogger.addHandler(ch)
-
-
 
 if __name__ == "__main__":
         initLogging()

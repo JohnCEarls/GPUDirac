@@ -48,7 +48,6 @@ class PackerQueue:
         if max_depth <= 0:
             self.logging.critical("Maxing out depth, adding packer")
             self.add_packer_boss()
-
         self._curr = (self._curr + 1)%len(self._bosses)
         if self._bosses[self._curr].ready():
             self._bosses_skip[self._curr] = 0
@@ -108,7 +107,6 @@ class PackerQueue:
             if p.is_alive():
                 count += 1
         return count
-            
 
 class Packer(Process):
     def __init__(self, name,p_type, in_q, out_q, smem,events, out_dir, dr_timeout=10):
@@ -123,7 +121,6 @@ class Packer(Process):
         self._dr_timeout = dr_timeout
         self.p_type = p_type
         self.daemon = True
-
 
     def run(self):
         self.events['add_data'].set()
@@ -140,7 +137,6 @@ class Packer(Process):
                     #Note: this is not guaranteed to be unique, only part of array used
                     #      do not want to wait for large matrix to be hashed
                     f_hash = hashlib.sha1(str(data)).hexdigest()
-                    
                     f_name = '_'.join([self.p_type, mess['file_id'], f_hash])
                     with open(os.path.join( self.out_dir, f_name), 'wb') as f:
                         self.logger.debug("Packer writing <%s>" % (f_name))
@@ -148,7 +144,6 @@ class Packer(Process):
                     mess['f_name'] = f_name
                     #data.fill(0) 
                     self.release_data()
-                   
                     self.events['data_ready'].clear()
                     self.events['add_data'].set()
                     self.out_q.put(mess)
@@ -169,7 +164,7 @@ class Packer(Process):
         for m in self.shared_mem.itervalues():
             l = m.get_lock()
             l.release()
-       
+
     def get_data(self):
         """
         Returns the np array wrapping the shared memory
@@ -188,14 +183,12 @@ class Packer(Process):
                 t_shape.append(i)
                 N = N * i
         t_shape = tuple(t_shape)
-        
         #Note: this is not a copy, it is a view
         #test with np.may_share_memory or data.ctypes.data
         data =  np.frombuffer(shared_mem['data'].get_obj(), dtype=dtypes.nd_list[shared_mem['dtype'].value])
         data = data[:N]
         data = data.reshape(t_shape)
         return data
-
 
 class PackerBoss:
     """
@@ -214,7 +207,7 @@ class PackerBoss:
         self.out_dir = out_dir
         self.data_settings = data_settings
         self.packer = self._create_packer( 'p_' + base_name )
-    
+
     def start(self):
         self.logger.debug(" starting packer..")
         self.packer.start()
@@ -287,8 +280,6 @@ class PackerBoss:
 
     def is_alive(self):
         return self.packer.process.is_alive()
-
-
 
 class PackerStruct:
     """

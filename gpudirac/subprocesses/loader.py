@@ -452,8 +452,7 @@ class LoaderDist(Process):
                 pass
         self.evt_death.clear()
         self.logger.info("%s: exiting..." % (self.name,))
-        
-    
+
 class Loader(Process):
     def __init__(self, inst_q, events, shared_mem, in_dir, name, add_data_timeout=10, inst_q_timeout=3):
         """
@@ -485,7 +484,6 @@ class Loader(Process):
         self.in_dir = in_dir
         self._ad_timeout = add_data_timeout
         self._iq_timeout = inst_q_timeout
-
 
     def _load_mem(self, np_array):
         """

@@ -36,7 +36,9 @@ class Retriever(Process):
         self.evt_death = evt_death
         self.max_q_size = max_q_size
         self.bad_file_cache = {}
-        
+        self.num_messages_pull = 10
+        self.visibility_timeout = 60
+       
     def run(self):
         while not self.evt_death.is_set():
             if self.q_ret2gpu.qsize() < self.max_q_size:
@@ -49,7 +51,8 @@ class Retriever(Process):
         """
         Does the work
         """
-        messages = self._sqs_q.get_messages(2, visibility_timeout=20)
+        messages = self._sqs_q.get_messages(self.num_messages_pull, 
+                    visibility_timeout=self.visibility_timeout)
         m_count = 0
         for message in messages:
             try:
@@ -60,9 +63,7 @@ class Retriever(Process):
                         self.logger.debug("Downloaded <%s>" % f)
                         m[f[:2]] = f
                         self._write_receipt_handle( m['file_id'], message.receipt_handle )
-
                     else:
-                        
                         self.logger.warning("FileMissing: <%s> does not exist on s3" % f)
                         if f in self.bad_file_cache and Message is not None:
                             #seen this bad file before, fool me once ...
@@ -82,7 +83,7 @@ class Retriever(Process):
                             return m_count
                 m_count += 1
             except:
-                self.logger.exception("While trying to download files" )                
+                self.logger.exception("While trying to download files" )
         return m_count
     def _write_receipt_handle(self, file_id, handle): 
         f_out = os.path.join(self.in_dir, 'receipt_handle_' + file_id)
@@ -124,7 +125,6 @@ class RetrieverQueue:
         self._retrievers = []
         self._reaper = []
 
-
     def add_retriever(self, num=1):
         if num <= 0:
             return
@@ -150,7 +150,6 @@ class RetrieverQueue:
             self._retrievers[-1].terminate()
         self._reaper = self._reaper[:-1]
         self._retrievers = self._retrievers[:-1]
-
 
     def repair(self):
         for i, d in enumerate(self._reaper):

@@ -37,7 +37,6 @@ class Poster(Process):
         self._s3_bucket = self._connect_s3()
         self.out_dir = out_dir
         self.evt_death = evt_death
-        
 
     def run(self):
         self.logger.info("starting...")
@@ -84,7 +83,6 @@ class Poster(Process):
         self.logger.debug("Deleting <%s>" % (os.path.join(self.out_dir, file_name)))
         os.remove(os.path.join(self.out_dir, file_name))
 
-
 class PosterQueue:
     def __init__(self,  name, out_dir,  q_gpu2s3,sqs_name, s3bucket_name, in_dir, in_sqs):
         self.name = name
@@ -101,20 +99,16 @@ class PosterQueue:
         self.in_sqs_q = in_sqs
 
     def add_poster(self, num=1):
-
         if num <= 0:
             return
         else:
             evt_death = Event()
             evt_death.clear()
-
-        
             self._posters.append( Poster(self.name + "_Poster_" + str(num), self.out_dir, self.in_dir,  self.q_gpu2s3, evt_death, self.sqs_name,self.in_sqs_q, self.s3bucket_name))
             self._reaper.append(evt_death)
             self._posters[-1].daemon = True
             self._posters[-1].start()
             self.add_poster(num - 1)
-            
 
     def remove_poster(self):
         if len(self._posters) == 0:
@@ -129,9 +123,6 @@ class PosterQueue:
             self._posters[-1].terminate()
         self._reaper = self._reaper[:-1]
         self._posters = self._posters[:-1]
-
-
-
 
     def repair(self):
         for i, d in enumerate(self._reaper):
@@ -155,7 +146,6 @@ class PosterQueue:
         for r in self._reaper:
             r.set()
 
-
     def clean_up(self):
         for r in self._posters:
             if r.is_alive():
@@ -166,8 +156,6 @@ class PosterQueue:
         self._posters = []
         self._reaper = []
         self.logger.info("Complete...")
-
-
 
     def num_sub(self):
         count = 0
