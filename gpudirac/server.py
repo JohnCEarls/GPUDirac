@@ -86,7 +86,6 @@ class Dirac:
             try:
                 self.logger.warning("Attempting Hard Cleanup")
                 self._hard_clean_up()
-
             except:
                 self.logger.exception("Hard cleanup failed")
 
@@ -247,7 +246,6 @@ class Dirac:
         command['increment'] =  integer
         command['min'] = integer !for remove only
         """
-
         if command['process'] == 'loader':
             self.logger.info("load balancing loader")
             self._lb_loader(command)
@@ -338,7 +336,6 @@ class Dirac:
         """
         Creates the dictionary holding state information for heartbeat
         """
-
         message = {}
         message['message-type'] = 'gpu-heartbeat'
         try:
@@ -607,7 +604,7 @@ def main():
     debug.initLogging()
     d = Dirac( directories, init_q )
     d.run()
-    
+
 if __name__ == "__main__":
     #debug.initLogging()
     import ConfigParser
