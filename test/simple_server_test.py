@@ -40,7 +40,6 @@ def runTest(num_data, level=0 ):
         dsize = push_data()
         print "sending init signal, with %i initial data" % num_data
         init_signal(dsize)
-        #just_data( num_data )
     elif level == 1:
         print "Load Balance starting"
         #load balance
@@ -72,6 +71,8 @@ def runTest(num_data, level=0 ):
         sqs_queue = "tcdirac-from-gpu-00"
         s3_bucket = "tcdirac-fromgpu-00"
         test_accuracy(orig_dir, test_dir, sqs_queue, s3_bucket, num_data)
+    else:
+        print "Run level: %i not recognized." % num_data
 
 def push_data():
 
@@ -106,7 +107,8 @@ def just_data(num_data):
     parsed['source-s3'] = 'tcdirac-togpu-00'
     parsed['result-s3'] = 'tcdirac-fromgpu-00'
     for i in range(np):
-        p = Process(target=afdq, args = (working_dir, orig_dir, block_sizes, (num_data/np) + 1, parsed))
+        p = Process(target=afdq, args = (working_dir, orig_dir, 
+                block_sizes, (num_data/np) + 1, parsed))
         p.start()
         ps.append(p)
     for p in ps:
@@ -115,7 +117,7 @@ def just_data(num_data):
 def afdq(working_dir, orig_dir, block_sizes, num_data, parsed):
     dsize, file_list = addFakeDataQueue(working_dir, orig_dir, block_sizes, num_data)
     load_data_s3( file_list, working_dir, parsed['source-s3'])
-    load_data_sqs( file_list,parsed['source-sqs'] )
+    load_data_sqs( file_list, parsed['source-sqs'] )
     return dsize
 
 def init_signal(dsize,  master_q = 'tcdirac-master'):
@@ -138,7 +140,7 @@ def init_signal(dsize,  master_q = 'tcdirac-master'):
             s.write(json.dumps( settings ))
     except:
         print "*"*30
-        print "Error in mockMaster"
+        print "Error in initialization signal"
         print "*"*30
         raise
 
@@ -191,7 +193,6 @@ def get_terminate_message():
     parsed = {}
     parsed['message-type'] = 'termination-notice'
     return json.dumps(parsed)
-
 
 def addFakeDataQueue(in_dir,orig_dir, block_sizes, num_data): 
     sample_block_size, npairs_block_size, nets_block_size = block_sizes
@@ -402,7 +403,6 @@ def testDirac(expression_matrix, gene_map, sample_map, network_map):
     return srt, rt, rms_final
 
 if __name__ == "__main__":
-
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('run_level',

@@ -13,6 +13,9 @@ import socket
 from multiprocessing import Process, Event
 
 import static
+import boto
+import boto.utils
+from boto.s3.key import Key
 
 class TimeTracker:
     def __init__(self):
@@ -107,6 +110,72 @@ class LogRecordSocketReceiver(SocketServer.ThreadingTCPServer):
             if rd:
                 self.handle_request()
 
+class S3TimedRotatatingFileHandler(TimedRotatingFileHandler):
+    def __init__(self, filename, when='h', interval=1, backupCount=0, encoding=None, delay=False, utc=False, bucket):
+        TimedRotatingFileHandler. __init__(self, filename, when, interval, backupCount, encoding, delay, utc)
+        self.bucket = bucket
+
+   def doRollover(self):
+        """
+        do a rollover; in this case, a date/time stamp is appended to the filename
+        when the rollover happens.  However, you want the file to be named for the
+        start of the interval, not the current time.  If there is a backup count,
+        then we have to get a list of matching filenames, sort them and remove
+        the one with the oldest suffix.
+        """
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        # get the time that this sequence started at and make it a TimeTuple
+        currentTime = int(time.time())
+        dstNow = time.localtime(currentTime)[-1]
+        t = self.rolloverAt - self.interval
+        if self.utc:
+            timeTuple = time.gmtime(t)
+        else:
+            timeTuple = time.localtime(t)
+            dstThen = timeTuple[-1]
+            if dstNow != dstThen:
+                if dstNow:
+                    addend = 3600
+                else:
+                    addend = -3600
+                timeTuple = time.localtime(t + addend)
+        dfn = self.baseFilename + "." + time.strftime(self.suffix, timeTuple)
+        if os.path.exists(dfn):
+            os.remove(dfn)
+        # Issue 18940: A file may not have been created if delay is True.
+        if os.path.exists(self.baseFilename):
+            os.rename(self.baseFilename, dfn)
+        if self.backupCount > 0:
+            for s in self.getFilesToDelete():
+                os.remove(s)
+        if not self.delay:
+            self.stream = self._open()
+        newRolloverAt = self.computeRollover(currentTime)
+        while newRolloverAt <= currentTime:
+            newRolloverAt = newRolloverAt + self.interval
+        #If DST changes and midnight or weekly rollover, adjust for this.
+        if (self.when == 'MIDNIGHT' or self.when.startswith('W')) and not self.utc:
+            dstAtRollover = time.localtime(newRolloverAt)[-1]
+            if dstNow != dstAtRollover:
+                if not dstNow:  # DST kicks in before next rollover, so we need to deduct an hour
+                    addend = -3600
+                else:           # DST bows out before next rollover, so we need to add an hour
+                    addend = 3600
+                newRolloverAt += addend
+        self.rolloverAt = newRolloverAt
+        #this is the new stuff
+        #copy to s3 the old file
+        self.pushToS3( dfn )
+
+    def pushToS3(self, filename):
+        conn = boto.connect_s3()
+        bucket = conn.get_bucket(self.bucket)
+        k = Key(bucket)
+        k.key = os.path.split(filename)[1]
+        k.set_contents_from_filename(filename, reduced_redundancy=True)
+
 def startLogger():
     import argparse
     import ConfigParser
@@ -115,15 +184,22 @@ def startLogger():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Configfile name', required=True)
     args = parser.parse_args()
-    config = ConfigParser.ConfigParser()
+    config = ConfigParser.ConfigParser(interpolation=None)
     config.read(args.config)
-    log_dir = config.get('directories', 'log')
-    LOG_FILENAME = "gpudirac-logserver.log"
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(  format=log_format)
+    
+    log_dir = config.get('base', 'directory')
+    LOG_FILENAME = config.get('base', 'log_filename')
+    if LOG_FILENAME is 'None':
+        md =  boto.utils.get_instance_metadata()
+        LOG_FILENAME = md['instance-id'] + '.log'
+    log_format = config.get('base', 'log_format')
+    bucket = config.get('base', 'bucket')
+    interval_type = config.get('base', 'interval_type')
+    interval = int(config.get('base', 'interval'))
+    logging.basicConfig(format=log_format)
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    handler = logging.handlers.RotatingFileHandler( os.path.join(log_dir,LOG_FILENAME), maxBytes=100*(2**20), backupCount=10)#log 100 MB
+    handler = logging.handlers.RotatingFileHandler()#log 100 MB
     handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger('').addHandler(handler)
     tcpserver = LogRecordSocketReceiver()
