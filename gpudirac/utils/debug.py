@@ -7,15 +7,22 @@ import sys
 import pickle
 import logging
 import logging.handlers
+from logging.handlers import TimedRotatingFileHandler
 import SocketServer
 import struct
 import socket
 from multiprocessing import Process, Event
+import threading
+import sys
+import signal
 
 import static
 import boto
 import boto.utils
 from boto.s3.key import Key
+
+import select
+import errno
 
 class TimeTracker:
     def __init__(self):
@@ -30,7 +37,6 @@ class TimeTracker:
     def end_work(self):
         self._working += time.time() - self._work_tick
         self._work_tick = time.time()
-
 
     def start_wait(self):
         self._wait_tick= time.time()
@@ -48,10 +54,10 @@ class TimeTracker:
 """
 Below is lightly modified from http://docs.python.org/2/howto/logging-cookbook.html#logging-cookbook
 """
-
+#global variable to kill stream handler from server
+damn_global = 0
 class LogRecordStreamHandler(SocketServer.StreamRequestHandler):
     """Handler for a streaming logging request.
-
     This basically logs the record using whatever logging policy is
     configured locally.
     """
@@ -61,7 +67,8 @@ class LogRecordStreamHandler(SocketServer.StreamRequestHandler):
         followed by the LogRecord in pickle format. Logs the record
         according to whatever policy is configured locally.
         """
-        while True:
+        global damn_global
+        while not damn_global:
             chunk = self.connection.recv(4)
             if len(chunk) < 4:
                 break
@@ -95,27 +102,41 @@ class LogRecordSocketReceiver(SocketServer.ThreadingTCPServer):
     Simple TCP socket-based logging receiver suitable for testing.
     """
     allow_reuse_address = 1
-    def __init__(self, host='localhost', port=logging.handlers.DEFAULT_TCP_LOGGING_PORT, handler=LogRecordStreamHandler):
+    def __init__(self, host='localhost', port=logging.handlers.DEFAULT_TCP_LOGGING_PORT, handler=LogRecordStreamHandler,doneEvent=None):
         SocketServer.ThreadingTCPServer.__init__(self, (host, port), handler)
         self.abort = 0
         self.timeout = 1
         self.logname = None
+        self.doneEvent=doneEvent
 
     def serve_until_stopped(self):
         import select
-        abort = 0
-        while not abort:
-            rd, wr, ex = select.select([self.socket.fileno()], [], [],  self.timeout)
-            abort = self.abort
-            if rd:
-                self.handle_request()
+        cont = self.doneEvent.is_set()
+        while cont:
+            try:
+                rd, wr, ex = select.select([self.socket.fileno()], [], [],  self.timeout)
+                cont = self.doneEvent.is_set()
+                if rd:
+                    self.handle_request()
+            except select.error,v:
+                #interrupt during select, ignore
+                if v[0] != errno.EINTR: raise
+                else: break
+        #set global variable to end any running handlers
+        #I am not proud of this
+        global damn_global
+        damn_global = 1
+        for handler in logging.getLogger('').handlers:
+            if isinstance( handler, S3TimedRotatatingFileHandler):
+                handler.doRollover()
+        self.doneEvent.set()
 
 class S3TimedRotatatingFileHandler(TimedRotatingFileHandler):
-    def __init__(self, filename, when='h', interval=1, backupCount=0, encoding=None, delay=False, utc=False, bucket):
+    def __init__(self, filename, when='h', interval=1, backupCount=0, encoding=None, delay=False, utc=False, bucket='diraclog'):
         TimedRotatingFileHandler. __init__(self, filename, when, interval, backupCount, encoding, delay, utc)
         self.bucket = bucket
 
-   def doRollover(self):
+    def doRollover(self):
         """
         do a rollover; in this case, a date/time stamp is appended to the filename
         when the rollover happens.  However, you want the file to be named for the
@@ -150,8 +171,8 @@ class S3TimedRotatatingFileHandler(TimedRotatingFileHandler):
         if self.backupCount > 0:
             for s in self.getFilesToDelete():
                 os.remove(s)
-        if not self.delay:
-            self.stream = self._open()
+        #if not self.delay:
+        self.stream = self._open()
         newRolloverAt = self.computeRollover(currentTime)
         while newRolloverAt <= currentTime:
             newRolloverAt = newRolloverAt + self.interval
@@ -184,46 +205,100 @@ def startLogger():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Configfile name', required=True)
     args = parser.parse_args()
-    config = ConfigParser.ConfigParser(interpolation=None)
+    config = ConfigParser.RawConfigParser()
     config.read(args.config)
-    
     log_dir = config.get('base', 'directory')
     LOG_FILENAME = config.get('base', 'log_filename')
-    if LOG_FILENAME is 'None':
+    if LOG_FILENAME == 'None':
         md =  boto.utils.get_instance_metadata()
         LOG_FILENAME = md['instance-id'] + '.log'
-    log_format = config.get('base', 'log_format')
     bucket = config.get('base', 'bucket')
     interval_type = config.get('base', 'interval_type')
     interval = int(config.get('base', 'interval'))
-    logging.basicConfig(format=log_format)
+    log_format = config.get('base', 'log_format')
+    port = config.get('base', 'port')
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    handler = logging.handlers.RotatingFileHandler()#log 100 MB
+    handler = S3TimedRotatatingFileHandler(os.path.join(log_dir,LOG_FILENAME), 
+                    when=interval_type, interval = interval, bucket=bucket)
+
+    doneEvent = threading.Event()
+    doneEvent.set()
+    tcpserver = LogRecordSocketReceiver(doneEvent=doneEvent, port=int(port))
+    def shutdownHandler(msg,evt):
+        logging.getLogger('logging.SIGHANDLER').critical("Shutdown handler activated")
+        if evt.is_set():#only want to do this once, if it is clear then it is shutting down
+            evt.clear()
+        sys.exit(0)
+
+    def terminate(signal,frame):
+        t = threading.Thread(target = shutdownHandler,
+                args = ('SIGTERM received',doneEvent))
+        t.start()
+        t.join()
+    for s in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT]:
+        signal.signal(s, terminate)
     handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger('').addHandler(handler)
-    tcpserver = LogRecordSocketReceiver()
-    print('About to start TCP server...')
+    try:
+        conn = boto.connect_s3()
+        conn.get_bucket(bucket)
+    except:
+        logging.getLogger('logging').exception("Creating s3://%s"%bucket)
+        conn = boto.connect_s3()
+        conn.create_bucket(bucket)
     tcpserver.serve_until_stopped()
 
-def initLogging(server='localhost', port=logging.handlers.DEFAULT_TCP_LOGGING_PORT, server_level=static.logging_server_level, sys_out_level=static.logging_stdout_level):
+def initLogging(configfile):
+    import ConfigParser
+    import logging
+    import os, os.path
+    config = ConfigParser.RawConfigParser()
+    config.read(configfile)
+
+    log_format = config.get('logging', 'log_format')
+    es_name = config.get('logging', 'external_server_name')
+    es_port = config.get('logging', 'external_server_port')
+    es_level = int(config.get('logging', 'external_server_level'))
+
+    is_name = config.get('logging', 'internal_server_name')
+    is_port = config.get('logging', 'internal_server_port')
+    is_level = config.get('logging', 'internal_server_level')
+
+    boto_level = config.get('logging', 'boto_level')
+    stdout_level =config.get('logging', 'stdout_level')
+
+    botoLogger = logging.getLogger('boto')
+    botoLogger.setLevel(int(boto_level))
+
+    formatter = logging.Formatter(log_format)
     rootLogger = logging.getLogger('')
     rootLogger.setLevel(logging.DEBUG)
-    botoLogger = logging.getLogger('boto')
-    botoLogger.setLevel(logging.WARNING)
-    socketHandler = logging.handlers.SocketHandler(server, port)
-    socketHandler.setLevel(server_level)
-    rootLogger.addHandler(socketHandler)
-    if sys_out_level is not None:
+
+    if es_name !='None':
+        print "In external server", es_level
+        server = es_name
+        port = es_port
+        server_level = es_level
+        socketHandler = logging.handlers.SocketHandler(server, int(port))
+        socketHandler.setLevel(int(server_level))
+        socketHandler.setFormatter(formatter)
+        rootLogger.addHandler(socketHandler)
+    if is_name !='None':
+        print "In Internal server", is_level
+        server = is_name
+        port = is_port
+        server_level = is_level
+        socketHandler = logging.handlers.SocketHandler(server, int(port))
+        socketHandler.setLevel(int(server_level))
+        socketHandler.setFormatter(formatter)
+        rootLogger.addHandler(socketHandler)
+    if stdout_level != 'None':
+        print "in stdout", stdout_level
         ch = logging.StreamHandler(sys.stdout)
-        ch.setLevel(sys_out_level)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        ch.setLevel(int(stdout_level))
         ch.setFormatter(formatter)
         rootLogger.addHandler(ch)
 
 if __name__ == "__main__":
-        initLogging()
-        logging.error("test")
-        logger = logging.getLogger("test1-new")
-        logger.error("test")
-
+    startLogger()
