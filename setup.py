@@ -30,8 +30,9 @@ if sys.version_info < (2, 7):
     sys.exit(1)
 
 from setuptools import setup, find_packages
-console_scripts = ['gpudirac-logserver = gpudirac.utils.debug:startLogger','gpudirac = gpudirac.server:main' ]
-extra = dict(install_requires=["boto>=2.9.9","pycuda>=2013.1.1"],              
+console_scripts = ['gpudirac-logserver = gpudirac.utils.debug:startLogger',
+                   'gpudirac = gpudirac.server:main' ]
+extra = dict(install_requires=["boto>=2.9.9","pycuda>=2013.1.1"],
             entry_points=dict(console_scripts=console_scripts), 
              zip_safe=False)
 VERSION = '0.0.0'#actually set in utils.static
