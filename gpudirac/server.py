@@ -61,6 +61,8 @@ class Dirac:
         self._hb = 0#heartbeat counter
         self._tcount = 0
         self.ctx = None
+        self.em_md5, self.gm_md5, self.sm_md5, self.nm_md5 = (
+                None,None,None,None)
         #terminating is state machine
         #see - _terminator for mor info
         def sigterm_handler(*args):
@@ -137,18 +139,45 @@ class Dirac:
             return False
         self.logger.debug("have data")
         db.clear_data_ready()
-        expression_matrix = db.get_expression_matrix()
-        gene_map = db.get_gene_map()
-        sample_map = db.get_sample_map()
-        network_map = db.get_network_map()
+        if db.get_expression_matrix_md5() != self.em_md5:
+            expression_matrix = db.get_expression_matrix()
+            exp = data.SharedExpression( expression_matrix )
+            self.em_md5 =  db.get_expression_matrix_md5()
+            self.exp = exp
+        else:
+            exp = self.exp
+        if db.get_gene_map_md5() != self.gm_md5:    
+            gene_map = db.get_gene_map()
+            gm = data.SharedGeneMap( gene_map )
+            self.gm_md5 = db.get_gene_map_md5() 
+            self.gm= gm
+        else:
+            gm = self.gm
+
+        if db.get_sample_map_md5() != self.sm_md5:
+            sample_map = db.get_sample_map()
+            sm = data.SharedSampleMap( sample_map )
+            self.sm_md5 = db.get_sample_map_md5()
+            self.sm= sm
+        else:
+            sm = self.sm
+
+        if db.get_network_map_md5() != self.nm_md5:
+            network_map = db.get_network_map()
+            nm = data.SharedNetworkMap( network_map )
+            self.nm_md5 = db.get_network_map_md5()
+            self.nm= nm
+        else:
+            nm = self.nm
         #put in gpu data structures
-        exp = data.SharedExpression( expression_matrix )
-        gm = data.SharedGeneMap( gene_map )
-        sm = data.SharedSampleMap( sample_map )
-        nm = data.SharedNetworkMap( network_map )
         #go to work
         srt,rt,rms =  dirac.run( exp, gm, sm, nm, self.sample_block_size, self.pairs_block_size, self.nets_block_size )
         #done with input
+        #clear to prevent copying
+        exp.clear()
+        gm.clear()
+        sm.clear()
+        nm.clear()
         file_id = db.get_file_id()
         db.release_loader_data()
         db.set_add_data()

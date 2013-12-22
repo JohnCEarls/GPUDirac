@@ -33,7 +33,8 @@ import pandas
 import pycuda.driver as cuda
 
 def runTest(num_data, level=0 ):
-    #parser.add_argument('run_level', help="0:run, 1:load balance, 2:terminate, 3:cleanup")
+    #parser.add_argument('run_level', help="0:run, 1:load balance, 
+    #2:terminate, 3:cleanup")
     if level == 0:
         #creates data and starts server
         print "Run starting"
@@ -247,24 +248,24 @@ def addFakeDataQueue(in_dir,orig_dir, block_sizes, num_data):
                 if v.size > dsize[k]:
                     dsize[k] = v.size
                 f_dict[k] = f_name
-            rms_buffer_data_size = int(buffer_nnets * buffer_nsamp * np.float32(1).nbytes * 3.1) #10% bigger than needed
+            rms_buffer_data_size = int(buffer_nnets * buffer_nsamp * 
+                    np.float32(1).nbytes * 3.1) #10% bigger than needed
             if rms_buffer_data_size > dsize['rms']:
                dsize['rms'] = rms_buffer_data_size 
             check_list.append(f_dict)
             for k,v in fake.iteritems():
                 #save original data
-                f_path = os.path.join(orig_dir, '_'.join([k,f_dict['file_id'],'original']))
+                f_path = os.path.join(orig_dir, 
+                        '_'.join([k,f_dict['file_id'],'original']))
                 with open(f_path, 'wb') as f:
                     np.save( f, v )
     for k,v in dsize.iteritems():
         dsize[k] =v*10
     return dsize, check_list
 
-
 def genFakeData( n, gn):
     neighbors = random.randint(5, 20)
     nnets = random.randint(50,100)
-
     samples = map(lambda x:'s%i'%x, range(n))
     genes = map(lambda x:'g%i'%x, range(gn))
     g_d = dict([(gene,i) for i,gene in enumerate(genes)])
@@ -289,7 +290,7 @@ def genFakeData( n, gn):
     sample_map = np.random.randint(low=0,high=len(samples), size=(len(samples),neighbors))
     sample_map = sample_map.astype(np.uint32)
     #print sample_map[:,:3]
-    network_map = np.array(net_map).astype(np.uint32)
+    twork_map = np.array(net_map).astype(np.uint32)
 
     data = {}
     data['em'] = expression_matrix

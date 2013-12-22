@@ -5,6 +5,7 @@ import random
 import os, os.path
 from multiprocessing import Process, Queue, Value, Event, Array
 import multiprocessing
+import ctypes
 from Queue import Empty
 
 import numpy as np
@@ -53,20 +54,15 @@ def kill_all(name, loaders, _ld_die_evt, loader_dist, file_q):
                     t_check.append(rn)
                     temp_d[k] = fname
             failed = False
-
             for r in t_check[1:]:
                 if r!=t_check[0]:
                     #order got screwed up. lost data
                     failed = True
-
-
             if not failed and len(t_check) == 4:
                 logger.debug( "terminator: recycling")
                 file_q.put( temp_d )
             else:
                 logger.error( "terminator: data out of order [%s]" % (','.join(temp_d.itervalues()),))
-
-
 
 class LoaderQueue:
     """
@@ -192,15 +188,28 @@ class LoaderBoss:
             throws Queue.Empty, that means we are out of sync
         """
         return self.id_q.get(True, 3) 
- 
+
+    def get_expression_matrix_md5(self):
+        return self._get_loader_md5('em')
+
     def get_expression_matrix(self):
         return self._get_loader_data('em')
+
+    def get_gene_map_md5(self):
+        return self._get_loader_data_md5('gm')
 
     def get_gene_map(self):
         return self._get_loader_data('gm')
 
+    def get_sample_map_md5(self):
+        return self._get_loader_data_md5('sm')
+
     def get_sample_map(self):
         return self._get_loader_data('sm')
+
+
+    def get_network_map_md5(self):
+        return self._get_loader_data_md5('nm')
 
     def get_network_map(self):
         return self._get_loader_data('nm')
@@ -294,6 +303,9 @@ class LoaderBoss:
     def _release_loader_data(self, key):
         return self.loaders[key].release_data()
 
+    def _get_loader_data_md5(self, key):
+        return self.loaders[key].get_md5()
+
     def _get_loader_data(self, key):
         return self.loaders[key].get_data()
 
@@ -322,6 +334,7 @@ class LoaderBoss:
         for i in xrange(len(shared_mem['shape'])):
             shared_mem['shape'][i] = 0
         shared_mem['dtype'] = Value('i',dtypes.nd_dict[np.dtype(dtype)])
+        shared_mem['md5'] = Array(ctypes.c_char, 16)
         return shared_mem
 
     def _create_events(self):
@@ -409,6 +422,11 @@ class LoaderStruct:
         data = data.reshape(t_shape)
         return data
 
+    def get_md5(self):
+        with self.shared_mem['md5'].get_lock():
+            md5 = self.shared_mem['md5'].value
+        return md5
+
     def release_data(self):
         """
         Releases lock on shared memory
@@ -478,6 +496,7 @@ class Loader(Process):
         self.smem_data = shared_mem['data']
         self.smem_shape = shared_mem['shape']
         self.smem_dtype = shared_mem['dtype']
+        self.smem_md5 = shared_mem['md5']
         self.evt_add_data = events['add_data']
         self.evt_data_ready = events['data_ready']
         self.evt_die = events['die']
@@ -566,6 +585,8 @@ class Loader(Process):
                 self.logger.debug(" new file <%s>" %(fname))
                 old_md5 = new_md5
                 new_md5 = self._get_md5(fname)
+                with self.smem_md5.get_lock():
+                    self.smem_md5.value = new_md5.decode( 'hex' )
                 if new_md5 != old_md5:
                     #self._clear_mem()
                     data = self._get_data(fname)
