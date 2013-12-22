@@ -602,4 +602,4 @@ class Loader(Process):
         """
         Given a formatted filename, returns the precalculated md5 (really any kind of tag)
         """
-        return fname.split('_')[-1]
+        return fname
