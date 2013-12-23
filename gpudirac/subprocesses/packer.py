@@ -136,8 +136,7 @@ class Packer(Process):
                     data = self.get_data()
                     #Note: this is not guaranteed to be unique, only part of array used
                     #      do not want to wait for large matrix to be hashed
-                    f_hash = hashlib.sha1(str(data)).hexdigest()
-                    f_name = '_'.join([self.p_type, mess['file_id'], f_hash])
+                    f_name = '_'.join([ mess['file_id'], self.p_type])
                     with open(os.path.join( self.out_dir, f_name), 'wb') as f:
                         self.logger.debug("Packer writing <%s>" % (f_name))
                         np.save(f, data)

@@ -58,10 +58,10 @@ class Retriever(Process):
             try:
                 m = json.loads(message.get_body())
                 error = False 
-                for f in m['f_names']:
+                for f_type, f in m['f_names'].iteritems():
                     if self.download_file( f ):
                         self.logger.debug("Downloaded <%s>" % f)
-                        m[f[:2]] = f
+                        m[f_type] = f
                         self._write_receipt_handle( m['file_id'], message.receipt_handle )
                     else:
                         self.logger.warning("FileMissing: <%s> does not exist on s3" % f)
@@ -103,8 +103,11 @@ class Retriever(Process):
     def download_file(self, file_name):
         k = Key(self._s3_bucket)
         k.key = file_name
-        if k.exists():
-            k.get_contents_to_filename( os.path.join(self.in_dir, file_name) )
+        local_path =  os.path.join(self.in_dir, file_name)
+        if os.path.exists(local_path):
+            return True
+        elif k.exists():
+            k.get_contents_to_filename( local_path )
             return True
         else:
             return False
