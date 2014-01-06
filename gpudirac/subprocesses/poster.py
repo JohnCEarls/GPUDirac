@@ -66,7 +66,7 @@ class Poster(Process):
 
     def _connect_s3(self):
         conn = boto.connect_s3()        
-        b = conn.get_bucket( self.s3bucket_name )
+        b = conn.create_bucket( self.s3bucket_name )
         return b
 
     def _connect_sqs(self, name=None):

@@ -139,33 +139,33 @@ class Dirac:
             return False
         self.logger.debug("have data")
         db.clear_data_ready()
-        if db.get_expression_matrix_md5() != self.em_md5:
+        if  db.get_expression_matrix_md5() != self.em_md5:
             expression_matrix = db.get_expression_matrix()
             exp = data.SharedExpression( expression_matrix )
-            self.em_md5 =  db.get_expression_matrix_md5()
+            self.em_md5 = None# db.get_expression_matrix_md5()
             self.exp = exp
         else:
             exp = self.exp
-        if db.get_gene_map_md5() != self.gm_md5:    
+        if  db.get_gene_map_md5() != self.gm_md5:    
             gene_map = db.get_gene_map()
             gm = data.SharedGeneMap( gene_map )
-            self.gm_md5 = db.get_gene_map_md5() 
+            self.gm_md5 = None# db.get_gene_map_md5() 
             self.gm= gm
         else:
             gm = self.gm
 
-        if db.get_sample_map_md5() != self.sm_md5:
+        if  db.get_sample_map_md5() != self.sm_md5:
             sample_map = db.get_sample_map()
             sm = data.SharedSampleMap( sample_map )
-            self.sm_md5 = db.get_sample_map_md5()
+            self.sm_md5 = None # db.get_sample_map_md5()
             self.sm= sm
         else:
             sm = self.sm
 
-        if db.get_network_map_md5() != self.nm_md5:
+        if  db.get_network_map_md5() != self.nm_md5:
             network_map = db.get_network_map()
             nm = data.SharedNetworkMap( network_map )
-            self.nm_md5 = db.get_network_map_md5()
+            self.nm_md5 = None #db.get_network_map_md5()
             self.nm= nm
         else:
             nm = self.nm
@@ -438,7 +438,6 @@ class Dirac:
             if command is None:
                 self.logger.warning("No instructions in [%s]"%self.sqs['command'])
             ctr += 1
-        
         if command is None:
             self.logger.error("Attempted to retrieve setup and no instructions received.")
             raise Exception("Waited 200 seconds and no instructions, exitting.")
@@ -630,7 +629,7 @@ def main():
     for t in ['source','results','log']:
         directories[t] =os.path.expanduser(config.get('directories',t))
     init_q = config.get('queues', 'init_q')
-    debug.initLogging()
+    debug.initLogging(args.config)
     d = Dirac( directories, init_q )
     d.run()
 

@@ -44,12 +44,15 @@ def kill_all(name, loaders, _ld_die_evt, loader_dist, file_q):
                 logger.error("Terminator: Unable to clear queues")
                 return
         #put back unused data
+        """
+        Not necessary with transaction guards
         while not temp_l.q.empty():
             temp_d = {}
             t_check = []
             for k, a_loader in loaders.iteritems():
                 if not a_loader.q.empty():
                     fname = a_loader.q.get()
+                    NOTE: this was throwing errors, file naming scheme changed
                     part, rn, a_hash = fname.split('_')
                     t_check.append(rn)
                     temp_d[k] = fname
@@ -63,7 +66,7 @@ def kill_all(name, loaders, _ld_die_evt, loader_dist, file_q):
                 file_q.put( temp_d )
             else:
                 logger.error( "terminator: data out of order [%s]" % (','.join(temp_d.itervalues()),))
-
+        """
 class LoaderQueue:
     """
     Object containing a list of LoaderBosses for the gpu to pull from
@@ -196,20 +199,20 @@ class LoaderBoss:
         return self._get_loader_data('em')
 
     def get_gene_map_md5(self):
-        return self._get_loader_data_md5('gm')
+        return self._get_loader_md5('gm')
 
     def get_gene_map(self):
         return self._get_loader_data('gm')
 
     def get_sample_map_md5(self):
-        return self._get_loader_data_md5('sm')
+        return self._get_loader_md5('sm')
 
     def get_sample_map(self):
         return self._get_loader_data('sm')
 
 
     def get_network_map_md5(self):
-        return self._get_loader_data_md5('nm')
+        return self._get_loader_md5('nm')
 
     def get_network_map(self):
         return self._get_loader_data('nm')
@@ -303,7 +306,7 @@ class LoaderBoss:
     def _release_loader_data(self, key):
         return self.loaders[key].release_data()
 
-    def _get_loader_data_md5(self, key):
+    def _get_loader_md5(self, key):
         return self.loaders[key].get_md5()
 
     def _get_loader_data(self, key):

@@ -36,14 +36,14 @@ class Retriever(Process):
         self.evt_death = evt_death
         self.max_q_size = max_q_size
         self.bad_file_cache = {}
-        self.num_messages_pull = 10
+        self.num_messages_pull = 1
         self.visibility_timeout = 60
 
     def run(self):
         while not self.evt_death.is_set():
             if self.q_ret2gpu.qsize() < self.max_q_size:
                 messages = self.run_once()
-            if messages < 10 and not self.evt_death.is_set():
+            if messages < self.num_messages_pull and not self.evt_death.is_set():
                 self.logger.warning("starving")
                 time.sleep(random.randint(1,10))
 
@@ -56,6 +56,8 @@ class Retriever(Process):
         m_count = 0
         for message in messages:
             try:
+                self.logger.debug("Recvd: %r" % message)
+                self.logger.debug("Body: %s" % message.get_body())
                 m = json.loads(message.get_body())
                 error = False 
                 for f_type, f in m['f_names'].iteritems():
