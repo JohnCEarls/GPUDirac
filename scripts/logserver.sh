@@ -13,7 +13,7 @@
 # Change the next 3 lines to suit where you install your script and what you want to call it
 DIR=/home/sgeadmin/.local/bin
 DAEMON=$DIR/gpudirac-logserver
-CONFIG_OPTS="-c $DIR/config.cfg"
+CONFIG_OPTS="-c /home/sgeadmin/GPUDirac/config/logserver.cfg"
 DAEMON_NAME=gpulogger
  
 # This next line determines what user the script runs as.
