@@ -201,7 +201,7 @@ def startLogger():
     import argparse
     import ConfigParser
     import os, os.path
-    import logging 
+    import logging
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Configfile name', required=True)
     args = parser.parse_args()
@@ -219,7 +219,7 @@ def startLogger():
     port = config.get('base', 'port')
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    handler = S3TimedRotatatingFileHandler(os.path.join(log_dir,LOG_FILENAME), 
+    handler = S3TimedRotatatingFileHandler(os.path.join(log_dir,LOG_FILENAME),
                     when=interval_type, interval = interval, bucket=bucket)
 
     doneEvent = threading.Event()
@@ -249,24 +249,22 @@ def startLogger():
         conn.create_bucket(bucket)
     tcpserver.serve_until_stopped()
 
-def initLogging(configfile):
-    import ConfigParser
-    import logging
-    import os, os.path
-    config = ConfigParser.RawConfigParser()
-    config.read(configfile)
+def initLogging():
+    import masterdirac.models.systemdefaults as sys_def
+    log_settings = sys_def.get_system_defaults(component='Dual GPU',
+            setting_name='logging')
 
-    log_format = config.get('logging', 'log_format')
-    es_name = config.get('logging', 'external_server_name')
-    es_port = config.get('logging', 'external_server_port')
-    es_level = int(config.get('logging', 'external_server_level'))
+    log_format = log_settings['log_format']
+    es_name = log_settings['external_server_name']
+    es_port = log_settings['external_server_port']
+    es_level = log_settings['external_server_level']
 
-    is_name = config.get('logging', 'internal_server_name')
-    is_port = config.get('logging', 'internal_server_port')
-    is_level = config.get('logging', 'internal_server_level')
+    is_name = log_settings[ 'internal_server_name']
+    is_port =  log_settings['internal_server_port']
+    is_level = log_settings['internal_server_level']
 
-    boto_level = config.get('logging', 'boto_level')
-    stdout_level =config.get('logging', 'stdout_level')
+    boto_level =  log_settings['boto_level']
+    stdout_level = log_settings['stdout_level']
 
     botoLogger = logging.getLogger('boto')
     botoLogger.setLevel(int(boto_level))

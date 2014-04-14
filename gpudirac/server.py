@@ -617,19 +617,15 @@ class Dirac:
                             raise
 
 def main():
-    import argparse
-    import ConfigParser
+    import masterdirac.models.systemdefaults as sys_def
     import os, os.path
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Configfile name', required=True)
-    args = parser.parse_args()
-    config = ConfigParser.ConfigParser()
-    config.read(args.config)
     directories = {}
-    for t in ['source','results','log']:
-        directories[t] =os.path.expanduser(config.get('directories',t))
-    init_q = config.get('queues', 'init_q')
-    debug.initLogging(args.config)
+    directories = sys_def.get_system_defaults(component='Dual GPU', 
+            setting_name='directories')
+    q_cfg = sys_def.get_system_defaults(component='Dual GPU', 
+            setting_name='queues')
+    init_q = q_cfg['init_q']
+    debug.initLogging()
     d = Dirac( directories, init_q )
     d.run()
 
