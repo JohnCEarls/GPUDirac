@@ -198,25 +198,21 @@ class S3TimedRotatatingFileHandler(TimedRotatingFileHandler):
         k.set_contents_from_filename(filename, reduced_redundancy=True)
 
 def startLogger():
-    import argparse
-    import ConfigParser
     import os, os.path
     import logging
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Configfile name', required=True)
-    args = parser.parse_args()
-    config = ConfigParser.RawConfigParser()
-    config.read(args.config)
-    log_dir = config.get('base', 'directory')
-    LOG_FILENAME = config.get('base', 'log_filename')
+    import masterdirac.models.systemdefaults as sys_def
+    ls_settings = sys_def.get_system_defaults(component='Dual GPU', 
+            setting_name='logserver')
+    log_dir = ls_settings['directory']
+    LOG_FILENAME = ls_settings['log_filename']
     if LOG_FILENAME == 'None':
         md =  boto.utils.get_instance_metadata()
         LOG_FILENAME = md['instance-id'] + '.log'
-    bucket = config.get('base', 'bucket')
-    interval_type = config.get('base', 'interval_type')
-    interval = int(config.get('base', 'interval'))
-    log_format = config.get('base', 'log_format')
-    port = config.get('base', 'port')
+    bucket = ls_settings[ 'bucket']
+    interval_type = ls_settings[ 'interval_type' ]
+    interval = int(ls_settings[ 'interval'])
+    log_format = ls_settings[ 'log_format' ]
+    port = ls_settings[ 'port' ]
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     handler = S3TimedRotatatingFileHandler(os.path.join(log_dir,LOG_FILENAME),
