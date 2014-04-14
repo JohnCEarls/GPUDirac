@@ -24,8 +24,6 @@ from subprocesses.packer import PackerQueue
 from device import dirac
 from device import data
 from utils import static, debug, dtypes
-import ConfigParser
-import argparse
 
 class PosterProgress(Exception):
     pass
@@ -631,15 +629,4 @@ def main():
 
 if __name__ == "__main__":
     #debug.initLogging()
-    import ConfigParser
-    import os, os.path
-    config = ConfigParser.ConfigParser()
-    conf = '/home/sgeadmin/.local/bin/config.cfg'
-    config.read(conf)
-    directories = {}
-    for t in ['source','results','log']:
-        directories[t] =os.path.expanduser(config.get('directories',t))
-    init_q = config.get('queues', 'init_q')
-    debug.initLogging()
-    d = Dirac( directories, init_q )
-    d.run()
+    print "Nothing Here, look at main()"
