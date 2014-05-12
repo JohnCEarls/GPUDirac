@@ -51,7 +51,7 @@ class Dirac:
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
         self.logger.info("Initializing: directories<%s> init_q<%s>" % (json.dumps(directories), init_q) )
-        self.s3 = {'source':None, 'results':None} 
+        self.s3 = {'source':None, 'results':None}
         self.sqs = {'source':None, 'results':None, 'command': self.name + '-command' , 'response': self.name + '-response' }
         self.directories = directories
         self._terminating = 0
@@ -108,7 +108,7 @@ class Dirac:
                 res = self._main()
                 self._heartbeat(force = (not res))
         except:
-            self.logger.exception("exception, attempting cleanup" ) 
+            self.logger.exception("exception, attempting cleanup" )
             if self._terminating < 5:#otherwise we've already tried this
                 try:
                     self._terminator()
@@ -144,10 +144,10 @@ class Dirac:
             self.exp = exp
         else:
             exp = self.exp
-        if  db.get_gene_map_md5() != self.gm_md5:    
+        if  db.get_gene_map_md5() != self.gm_md5:
             gene_map = db.get_gene_map()
             gm = data.SharedGeneMap( gene_map )
-            self.gm_md5 = None# db.get_gene_map_md5() 
+            self.gm_md5 = None# db.get_gene_map_md5()
             self.gm= gm
         else:
             gm = self.gm
@@ -320,7 +320,7 @@ class Dirac:
 
     def _lb_packer(self, command):
         """
-        Load Balance on Packer 
+        Load Balance on Packer
         """
         if command['type'] == 'add':
             self._packerq.add_packer_boss(num=command['increment'])
@@ -399,7 +399,7 @@ class Dirac:
                 self.logger.info("killing cuda")
                 self.ctx.pop()
             except:
-                self.logger.error("unable to successfully clear context") 
+                self.logger.error("unable to successfully clear context")
 
     def _get_settings(self, init_q_name):
         """
@@ -420,11 +420,12 @@ class Dirac:
         md =  boto.utils.get_instance_metadata()
         self._availabilityzone = md['placement']['availability-zone']
         self._region = self._availabilityzone[:-1]
-        message = {'message-type':'gpu-init', 
+        message = {'message-type':'gpu-init',
                 'name': self.name,
-                'instance-id': md['instance-id'], 
-                'command' : self.sqs['command'], 
-                'response' : self.sqs['response'], 
+                'cluster-name': self.get_cluster_name(),
+                'instance-id': md['instance-id'],
+                'command' : self.sqs['command'],
+                'response' : self.sqs['response'],
                 'zone':self._availabilityzone }
         m = Message(body=json.dumps(message))
         init_q.write( m )
@@ -432,7 +433,7 @@ class Dirac:
         command = None
         ctr = 0
         while command is None:
-            command = command_q.read(  wait_time_seconds=20 ) 
+            command = command_q.read(  wait_time_seconds=20 )
             if command is None:
                 self.logger.warning("No instructions in [%s]"%self.sqs['command'])
             ctr += 1
@@ -447,6 +448,9 @@ class Dirac:
             self.logger.debug("sqs< %s > s3< %s > ds< %s > gpu_id< %s >" % (str(self.sqs), str(self.s3), str(self.data_settings), str(self.gpu_id)) )
         except AttributeError:
             self.logger.exception("Probably terminated before initialization")
+
+    def get_cluster_name( self ):
+        return '-'.join(socket.gethostname().split('-')[:-1])
 
     def _set_settings( self, command):
         """
@@ -511,7 +515,7 @@ class Dirac:
                 time.sleep(1)
                 ctr += 1
             if response_q.count():
-                dump_path = os.path.join(self.directories['log'], 
+                dump_path = os.path.join(self.directories['log'],
                                 self.name + "-response-queue-unsent.log")
                 self.logger.warning("Dumping response queue to [%s]" % (dump_path,)    )
                 response_q.dump(dump_path, sep='\n\n')
@@ -534,17 +538,17 @@ class Dirac:
         self._source_q = Queue()#queue containing names of source data files for processing
         self._result_q = Queue()#queue containing names of result data files from processing
         self._retrieverq = RetrieverQueue( self.name + "_RetrieverQueue",
-                    self.directories['source'], self._source_q, 
+                    self.directories['source'], self._source_q,
                     self.sqs['source'], self.s3['source'] )
-        self._posterq = PosterQueue( self.name + "_PosterQueue", 
-                    self.directories['results'], self._result_q, 
-                    self.sqs['results'], self.s3['results'], 
+        self._posterq = PosterQueue( self.name + "_PosterQueue",
+                    self.directories['results'], self._result_q,
+                    self.sqs['results'], self.s3['results'],
                     self.directories['source'], self.sqs['source'] )
-        self._loaderq = LoaderQueue( self.name + "_LoaderQueue", 
-                    self._source_q, self.directories['source'], 
+        self._loaderq = LoaderQueue( self.name + "_LoaderQueue",
+                    self._source_q, self.directories['source'],
                     data_settings = self.data_settings['source'] )
-        self._packerq = PackerQueue( self.name + "_PackerQueue", 
-                    self._result_q, self.directories['results'], 
+        self._packerq = PackerQueue( self.name + "_PackerQueue",
+                    self._result_q, self.directories['results'],
                     data_settings = self.data_settings['results'] )
         self.logger.debug("Subprocesses Initialized" )
 
@@ -618,9 +622,9 @@ def main():
     import masterdirac.models.systemdefaults as sys_def
     import os, os.path
     directories = {}
-    directories = sys_def.get_system_defaults(component='Dual GPU', 
+    directories = sys_def.get_system_defaults(component='Dual GPU',
             setting_name='directories')
-    q_cfg = sys_def.get_system_defaults(component='Dual GPU', 
+    q_cfg = sys_def.get_system_defaults(component='Dual GPU',
             setting_name='queues')
     init_q = q_cfg['init_q']
     debug.initLogging()
