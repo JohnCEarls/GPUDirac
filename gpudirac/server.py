@@ -55,6 +55,7 @@ class Dirac:
         self.sqs = {'source':None, 'results':None, 'command': self.name + '-command' , 'response': self.name + '-response' }
         self.directories = directories
         self._terminating = 0
+        self._restart = False
         #counters
         self._hb = 0#heartbeat counter
         self._tcount = 0
@@ -91,6 +92,10 @@ class Dirac:
 
     def set_logging_level(self, level):
         self.logger.setLevel(level)
+
+    @property
+    def restart(self):
+        return self._restart
 
     def run(self):
         """
@@ -256,6 +261,12 @@ class Dirac:
             self.logger.warning("received termination notice")
             self._terminating = 1
             self._terminator()
+        if command['message-type'] == 'restart-notice':
+            #master says die
+            self.logger.warning("received restart notice")
+            self._terminating = 1
+            self._terminator()
+            self._restart = True
         if command['message-type'] == 'load-balance':
             self.logger.info(str(command))
             self._handle_load_balance(command)
@@ -628,8 +639,11 @@ def main():
             setting_name='queues')
     init_q = q_cfg['init_q']
     debug.initLogging()
-    d = Dirac( directories, init_q )
-    d.run()
+    running = True
+    while running:
+        d = Dirac( directories, init_q )
+        d.run()
+        running = d.restart
 
 if __name__ == "__main__":
     #debug.initLogging()
