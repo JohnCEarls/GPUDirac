@@ -46,8 +46,10 @@ class Dirac:
         sqs['command'] : queue containing instructions from master
         sqs['response'] : queue for communication with master
     """
-    def __init__(self, directories, init_q ):
+    def __init__(self, directories, init_q, gpu_id=0 ):
+        self.gpu_id = gpu_id
         self.name = self._generate_name()
+        
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
         self.logger.info("Initializing: directories<%s> init_q<%s>" % (json.dumps(directories), init_q) )
@@ -473,7 +475,6 @@ class Dirac:
         self.s3['source'] = command['source-s3']
         self.s3['results'] = command['result-s3']
         self.data_settings = self._reformat_data_settings(command['data-settings'])
-        self.gpu_id = command['gpu-id']
         self.sample_block_size = command['sample-block-size']
         self.pairs_block_size = command['pairs-block-size']
         self.nets_block_size = command['nets-block-size']
@@ -632,6 +633,10 @@ class Dirac:
 def main():
     import masterdirac.models.systemdefaults as sys_def
     import os, os.path
+    import argparse
+    parser = argparse.ArgumentParser(description='Get gpu')
+    parser.add_argument("gpu_id", type=int)
+    args = parser.parse_args()
     directories = {}
     directories = sys_def.get_system_defaults(component='Dual GPU',
             setting_name='directories')
@@ -641,7 +646,7 @@ def main():
     debug.initLogging()
     running = True
     while running:
-        d = Dirac( directories, init_q )
+        d = Dirac( directories, init_q, gpu_id = args.gpu_id )
         d.run()
         running = d.restart
 
