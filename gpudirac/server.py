@@ -470,7 +470,7 @@ class Dirac:
         Given a command dictionary containing a global config,
         set instance variables necessary for startup.
         """
-        self._run_id = command['run_id']
+        self._run_id = command['run-id']
         self.sqs['results'] = command['result-sqs']
         self.sqs['source'] = command['source-sqs']
         self.s3['source'] = command['source-s3']
@@ -648,11 +648,17 @@ def main():
             setting_name="local_settings")
     init_q = local['init-queue']
     debug.initLogging()
-    running = True
-    while running:
-        d = Dirac( directories, init_q, gpu_id = args.gpu_id )
-        d.run()
-        running = d.restart
+    try:
+        running = True
+        while running:
+            d = Dirac( directories, init_q, gpu_id = args.gpu_id )
+            d.run()
+            running = d.restart
+    except:
+        logger = logging.getLogger("GPU%i"%args.gpu_id)
+        logger.exception("Process killing error")
+
+        
 
 if __name__ == "__main__":
     #debug.initLogging()
