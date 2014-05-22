@@ -192,7 +192,7 @@ class S3TimedRotatatingFileHandler(TimedRotatingFileHandler):
 
     def pushToS3(self, filename):
         conn = boto.connect_s3()
-        bucket = conn.get_bucket(self.bucket)
+        bucket = conn.create_bucket(self.bucket)
         k = Key(bucket)
         k.key = os.path.split(filename)[1]
         k.set_contents_from_filename(filename, reduced_redundancy=True)
@@ -238,7 +238,7 @@ def startLogger():
     logging.getLogger('').addHandler(handler)
     try:
         conn = boto.connect_s3()
-        conn.get_bucket(bucket)
+        conn.create_bucket(bucket)
     except:
         logging.getLogger('logging').exception("Creating s3://%s"%bucket)
         conn = boto.connect_s3()
