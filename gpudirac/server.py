@@ -49,7 +49,6 @@ class Dirac:
     def __init__(self, directories, init_q, gpu_id=0 ):
         self.gpu_id = gpu_id
         self.name = self._generate_name()
-        
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
         self.logger.info("Initializing: directories<%s> init_q<%s>" % (json.dumps(directories), init_q) )
@@ -380,6 +379,7 @@ class Dirac:
         message['message-type'] = 'gpu-heartbeat'
         try:
             message['name'] = self.name
+            message['run-id'] = self._run_id
             message['num-packer'] = self._packerq.num_sub()
             message['num-poster'] = self._posterq.num_sub()
             message['num-retriever'] = self._retrieverq.num_sub()
@@ -470,6 +470,7 @@ class Dirac:
         Given a command dictionary containing a global config,
         set instance variables necessary for startup.
         """
+        self._run_id = command['run_id']
         self.sqs['results'] = command['result-sqs']
         self.sqs['source'] = command['source-sqs']
         self.s3['source'] = command['source-s3']
@@ -540,7 +541,8 @@ class Dirac:
         """
         md =  boto.utils.get_instance_metadata()
         pid = str( multiprocessing.current_process().pid )
-        return md['instance-id'] + '_' + pid
+        r = str(random.randint(1000,9999))
+        return md['instance-id'] + '_' + pid + '_' + r 
 
     def _init_subprocesses(self):
         """
@@ -642,7 +644,9 @@ def main():
             setting_name='directories')
     q_cfg = sys_def.get_system_defaults(component='Dual GPU',
             setting_name='queues')
-    init_q = q_cfg['init_q']
+    local = sys_def.get_system_defaults( component='Master', 
+            setting_name="local_settings")
+    init_q = local['init-queue']
     debug.initLogging()
     running = True
     while running:
