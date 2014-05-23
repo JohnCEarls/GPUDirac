@@ -276,6 +276,7 @@ class Dirac:
             #master says restart
             self.logger.warning("received restart notice")
             self._terminating = 1
+            self._terminator()
             self._restart = True
         if command['message-type'] == 'load-balance':
             self.logger.info(str(command))
