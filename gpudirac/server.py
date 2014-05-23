@@ -47,7 +47,7 @@ class Dirac:
         sqs['response'] : queue for communication with master
     """
     def __init__(self, directories, init_q, gpu_id=0 ):
-        self.gpu_id = gpu_id
+        self._gpu_id = gpu_id
         self.name = self._generate_name()
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(static.logging_base_level)
@@ -97,6 +97,10 @@ class Dirac:
     @property
     def restart(self):
         return self._restart
+
+    @property
+    def gpu_id(self):
+        return self._gpu_id
 
     def run(self):
         """
@@ -213,6 +217,12 @@ class Dirac:
         else:
             self._hb += 1
 
+    def terminate_response( self ):
+        conn = boto.sqs.connect_to_region( 'us-east-1' )
+        response_q = conn.create_queue( self.sqs['response'] )
+        mess = Message( body=json.dumps({'message': 'terminated'}) ) 
+        response_q.write( mess )
+
     def _terminator(self):
         """
         Handles the logic for shutting down instance.
@@ -263,10 +273,9 @@ class Dirac:
             self._terminating = 1
             self._terminator()
         if command['message-type'] == 'restart-notice':
-            #master says die
+            #master says restart
             self.logger.warning("received restart notice")
             self._terminating = 1
-            self._terminator()
             self._restart = True
         if command['message-type'] == 'load-balance':
             self.logger.info(str(command))
@@ -436,6 +445,7 @@ class Dirac:
         message = {'message-type':'gpu-init',
                 'name': self.name,
                 'cluster-name': self.get_cluster_name(),
+                'gpu-id' : self.gpu_id,
                 'instance-id': md['instance-id'],
                 'command' : self.sqs['command'],
                 'response' : self.sqs['response'],
@@ -444,15 +454,10 @@ class Dirac:
         init_q.write( m )
         command_q = conn.get_queue( self.sqs['command'] )
         command = None
-        ctr = 0
         while command is None:
-            command = command_q.read(  wait_time_seconds=20 )
+            command = command_q.read( wait_time_seconds=20 )
             if command is None:
                 self.logger.warning("No instructions in [%s]"%self.sqs['command'])
-            ctr += 1
-        if command is None:
-            self.logger.error("Attempted to retrieve setup and no instructions received.")
-            raise Exception("Waited 200 seconds and no instructions, exitting.")
         self.logger.debug("Init Message %s", command.get_body())
         parsed = json.loads(command.get_body())
         command_q.delete_message( command )
@@ -514,6 +519,7 @@ class Dirac:
         Command queues are created by and specific to this process,
         clean them up when done.
         """
+        raise Exception("DEPRECATED")
         conn = boto.sqs.connect_to_region( 'us-east-1' )
         command_q = conn.get_queue( self.sqs['command'] )
         if command_q is not None:
@@ -654,6 +660,8 @@ def main():
             d = Dirac( directories, init_q, gpu_id = args.gpu_id )
             d.run()
             running = d.restart
+            if not running:
+                d.terminate_response()
     except:
         logger = logging.getLogger("GPU%i"%args.gpu_id)
         logger.exception("Process killing error")
