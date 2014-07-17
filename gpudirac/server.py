@@ -649,8 +649,6 @@ def main():
     directories = {}
     directories = sys_def.get_system_defaults(component='Dual GPU',
             setting_name='directories')
-    q_cfg = sys_def.get_system_defaults(component='Dual GPU',
-            setting_name='queues')
     local = sys_def.get_system_defaults( component='Master', 
             setting_name="local_settings")
     init_q = local['init-queue']
