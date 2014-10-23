@@ -661,6 +661,7 @@ def main():
             running = d.restart
             if not running:
                 d.terminate_response()
+            running = True
     except:
         logger = logging.getLogger("GPU%i"%args.gpu_id)
         logger.exception("Process killing error")
